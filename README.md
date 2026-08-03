@@ -113,4 +113,30 @@ ngược lại — mỗi máy ghi một bộ riêng (`--out recordings_mac`, `--
 
 ## Giai đoạn 3 — Chạy auto
 
-Chưa triển khai (`main.py`, `dwauto/`).
+### `dwauto/screen.py` — chụp màn hình + nhận diện nút
+
+```python
+from dwauto import Screen, find_template
+
+with Screen(area={"left": 100, "top": 80, "width": 900, "height": 1600}) as sc:
+    m = sc.find("templates/search_button.png", threshold=0.85)
+    if m:
+        print(m.x, m.y, m.score)      # tâm vùng khớp, theo PIXEL của ảnh chụp
+        print(sc.to_mouse(m.x, m.y))  # → toạ độ chuột để pyautogui click
+
+    # chờ popup "under attack" trong một vùng nhất định
+    sc.wait_for("templates/under_attack.png", timeout=180, interval=1.0,
+                region=(200, 100, 700, 400))
+```
+
+Lưu ý toạ độ: `find/wait_for` trả **pixel của ảnh chụp**; trên Retina hoặc Windows
+scaling >100% con số này **không phải** toạ độ chuột — luôn đi qua `to_mouse()` trước
+khi click. `Screen.scale` được đo lại ở mỗi `capture()`.
+
+Các thành phần còn lại (`actions.py`, `rally.py`, `main.py`) chưa triển khai.
+
+## Test
+
+```bash
+pytest              # 26 test, chạy bằng ảnh tổng hợp, không cần màn hình
+```
