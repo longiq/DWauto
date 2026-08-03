@@ -1,8 +1,12 @@
 # Spec: Tool Auto Rally cho Darkwar Survival (workflow ghi-thao-tác)
 
-> Tài liệu này là **spec để phiên Claude CLI cục bộ trên Windows** thực thi.
-> Phiên đám mây không build code (không thấy màn hình Windows); mọi bước ghi/chạy
-> diễn ra trên máy Windows có giả lập + game đang mở.
+> Tài liệu này là spec để phiên Claude CLI **cục bộ trên máy có game đang mở** thực thi.
+> Mọi bước ghi/chạy đều cần màn hình thật, không làm được ở phiên đám mây.
+>
+> **Hai môi trường mục tiêu** (cập nhật 04/08/2026): **macOS + BlueStacks** và
+> **Windows + app/giả lập của game**. Code dùng chung; khác biệt nền tảng (Retina /
+> DPI scaling, quyền Accessibility + Screen Recording trên macOS, phím F8/F9 bị
+> macOS chiếm) được xử lý trong `recorder.py` — xem README.
 
 ## Bối cảnh
 
@@ -18,7 +22,8 @@ Chu trình cần auto:
 
 ## Quyết định đã chốt
 
-- **Toàn bộ chạy ở phiên Claude CLI CỤC BỘ trên Windows.**
+- **Toàn bộ chạy ở phiên Claude CLI CỤC BỘ trên máy có game** (macOS/BlueStacks hoặc
+  Windows). Template ghi ở máy nào chỉ dùng cho máy đó.
 - Lấy ảnh mẫu + luồng bằng **chế độ "recorder"**: người dùng thao tác rally một lần
   bằng tay, script ghi **screenshot + tọa độ tại mỗi lần click** và tự cắt vùng quanh
   nút thành ảnh mẫu. Sau đó Claude **chuẩn hóa** (gán nhãn, sinh config) rồi viết tool auto.
@@ -108,6 +113,8 @@ DWauto/
 
 - Tool chỉ giả lập input chuột → không can thiệp API game.
 - Giữ **độ phân giải giả lập cố định**; đổi thì ghi/chụp lại template.
+- Retina/DPI: `pynput` cho toạ độ logic, `mss` cho pixel vật lý → luôn quy đổi qua
+  `scale` ghi trong `clicks.json`; `actions.py` phải click bằng toạ độ **logic**.
 - Bước chuẩn hóa cần con người/Claude xác nhận nhãn để tránh gán sai nút.
 
 ## Ngoài phạm vi (trừ khi yêu cầu thêm)
