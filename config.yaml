@@ -17,6 +17,10 @@ capture:
 
 match:
   threshold: 0.85          # điểm khớp thật đo được: 1.00 đúng nút, ≤0.45 nút khác
+  thresholds:              # ngưỡng riêng cho nút khó
+    # Kính lúp vẽ đè thẳng lên bản đồ, không có nền riêng: chat trong game chạy
+    # qua phía sau làm điểm rớt còn ~0.86. Đo được: có nút 0.86-1.00, không có 0.53.
+    search_button: 0.75
 
 templates:
   search_button: templates/search_button.png    # kính lúp trên world map

@@ -71,8 +71,8 @@ def find_window(title: str = "BlueStacks") -> WindowRect:
     rect = _find_mac(title) if IS_MAC else _find_windows(title)
     if rect is None:
         raise WindowNotFound(
-            f"Không thấy cửa sổ nào tên chứa '{title}'. Mở giả lập lên, "
-            f"hoặc sửa capture.window_title trong config."
+            f"No window found whose title contains '{title}'. Start the emulator, "
+            f"or fix capture.window_title in the config."
         )
     return rect
 

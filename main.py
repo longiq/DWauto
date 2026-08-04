@@ -25,7 +25,7 @@ from dwauto.screen import Screen
 def make_screen(cfg: Config):
     """Nguồn ảnh theo config: ADB (cửa sổ ở đâu cũng chạy) hoặc chụp màn hình."""
     if cfg.backend == "screen":
-        logging.info("Nguồn ảnh: chụp màn hình, vùng cố định %s", cfg.region)
+        logging.info("Capture source: screen grab, fixed region %s", cfg.region)
         return Screen(area=dict(cfg.region))
 
     from dwauto.adb import AdbScreen, scan_ports
@@ -36,10 +36,10 @@ def make_screen(cfg: Config):
         port = scan_ports(cfg.adb_host)
         if port is None:
             raise RuntimeError(
-                "Không dò được cổng ADB nào đang mở. Mở giả lập lên, và bật ADB "
-                "trong Settings → Advanced nếu là BlueStacks trên Windows."
+                "No open ADB port found. Start the emulator, and enable ADB under "
+                "Settings > Advanced if you are on BlueStacks for Windows."
             )
-        logging.info("Dò được cổng ADB: %d", port)
+        logging.info("Found ADB port: %d", port)
 
     scr = AdbScreen(
         template_width=cfg.template_width,
@@ -50,7 +50,7 @@ def make_screen(cfg: Config):
     raw = scr.grab_raw()  # thất bại sớm nếu ADB không dùng được
     win = find_window(cfg.window_title)
     logging.info(
-        "Nguồn ảnh: ADB %s:%d — màn Android %dx%d, cửa sổ '%s' tại (%d,%d) %dx%d",
+        "Capture source: ADB %s:%d - Android screen %dx%d, window '%s' at (%d,%d) %dx%d",
         cfg.adb_host, port, raw.shape[1], raw.shape[0], cfg.window_title,
         win.left, win.top, win.width, win.height,
     )
@@ -80,25 +80,26 @@ def dry_run(cfg: Config, screen: Screen, mouse: Mouse, rounds: int = 3) -> int:
     seen_any = False
     for i in range(rounds):
         frame = screen.capture()
-        log.info("--- quét %d/%d (ảnh %dx%d) ---", i + 1, rounds, frame.shape[1], frame.shape[0])
+        log.info("--- scan %d/%d (image %dx%d) ---", i + 1, rounds, frame.shape[1], frame.shape[0])
         for name in names:
-            m = screen.find(str(cfg.templates[name]), threshold=cfg.threshold, screen=frame)
+            need = cfg.threshold_for(name)
+            m = screen.find(str(cfg.templates[name]), threshold=need, screen=frame)
             if m is None:
                 loose = screen.find(str(cfg.templates[name]), threshold=0.0, screen=frame)
-                log.info("  %-15s không thấy (điểm cao nhất %.2f < %.2f)",
-                         name, loose.score if loose else 0.0, cfg.threshold)
+                log.info("  %-15s not found (best score %.2f < %.2f)",
+                         name, loose.score if loose else 0.0, need)
                 continue
             seen_any = True
             mx, my = screen.to_mouse(m.x, m.y)
-            log.info("  %-15s THẤY điểm %.2f tại ảnh (%d,%d) → sẽ click ở (%d,%d)",
+            log.info("  %-15s FOUND score %.2f at image (%d,%d) -> would click at (%d,%d)",
                      name, m.score, m.x, m.y, mx, my)
         if i < rounds - 1:
             time.sleep(1.0)
 
     if not seen_any:
         log.error(
-            "Không nhận ra nút nào. Kiểm tra: cửa sổ giả lập có bị che không, "
-            "capture.region trong %s còn đúng không (đo lại: python recorder.py --pick-region).",
+            "No button recognised. Check that the emulator window is not covered, and "
+            "that the settings in %s still match your setup.",
             cfg.path,
         )
         return 1
@@ -130,12 +131,12 @@ class HotkeyControl:
             if name == self.start_key:
                 if self.running.is_set():
                     self.running.clear()
-                    logging.info("=== TẠM DỪNG (bấm %s để chạy tiếp) ===", self.start_key.upper())
+                    logging.info("=== PAUSED (press %s to resume) ===", self.start_key.upper())
                 else:
                     self.running.set()
-                    logging.info("=== CHẠY ===")
+                    logging.info("=== RUNNING ===")
             elif name == self.quit_key:
-                logging.info("=== THOÁT ===")
+                logging.info("=== QUIT ===")
                 self.quitting.set()
                 self.running.clear()
                 return False
@@ -189,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     logging.info(
-        "%d lượt/vòng, chờ %g phút giữa các vòng, ngưỡng khớp %.2f",
+        "%d marches per cycle, %g minute wait between cycles, match threshold %.2f",
         cfg.marches_per_round, cfg.wait_minutes, cfg.threshold,
     )
 
@@ -204,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.marches > 0:
         runner = RallyRunner(screen, mouse, cfg, focus=focus)
-        logging.info("Chạy thử %d lượt march, bắt đầu ngay.", args.marches)
+        logging.info("Test run: %d marches, starting now.", args.marches)
         try:
             for i in range(args.marches):
                 logging.info("--- Lượt %d/%d ---", i + 1, args.marches)
@@ -213,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             screen.close()
             logging.info(
-                "Tổng kết: %d lượt thành công, %d lượt hỏng",
+                "Summary: %d marches succeeded, %d failed",
                 runner.marches_done, runner.marches_failed,
             )
         return 0 if runner.marches_done == args.marches else 1
@@ -223,7 +224,7 @@ def main(argv: list[str] | None = None) -> int:
     runner = RallyRunner(screen, mouse, cfg, should_stop=hotkeys.should_stop, focus=focus)
 
     logging.info(
-        "Sẵn sàng. %s = chạy/dừng, %s = thoát. Đưa BlueStacks lên trước rồi bấm %s.",
+        "Ready. %s = run/pause, %s = quit. Bring the emulator to front, then press %s.",
         args.start_key.upper(), args.quit_key.upper(), args.start_key.upper(),
     )
     try:
@@ -233,15 +234,15 @@ def main(argv: list[str] | None = None) -> int:
                 continue
             runner.run_forever()
     except KeyboardInterrupt:
-        logging.info("Dừng bởi Ctrl-C")
+        logging.info("Stopped by Ctrl-C")
     except Exception:
-        logging.exception("Lỗi không lường trước — dừng lại cho an toàn")
+        logging.exception("Unexpected error - stopping for safety")
         return 1
     finally:
         hotkeys.stop()
         screen.close()
         logging.info(
-            "Tổng kết: %d lượt thành công, %d lượt hỏng",
+            "Summary: %d marches succeeded, %d failed",
             runner.marches_done, runner.marches_failed,
         )
     return 0

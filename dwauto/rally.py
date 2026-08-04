@@ -67,11 +67,11 @@ class RallyRunner:
             self._tpl(name),
             timeout=self.cfg.step_timeout if timeout is None else timeout,
             interval=self.cfg.poll_interval,
-            threshold=self.cfg.threshold,
+            threshold=self.cfg.threshold_for(name),
         )
 
     def _find(self, name: str):
-        return self.screen.find(self._tpl(name), threshold=self.cfg.threshold)
+        return self.screen.find(self._tpl(name), threshold=self.cfg.threshold_for(name))
 
     def _wait_gone(self, name: str) -> bool:
         """Chờ tới khi nút biến mất — dùng cho bước cuối, xem như click đã ăn."""
@@ -102,7 +102,7 @@ class RallyRunner:
     def do_step(self, step: Step) -> bool:
         match = self._wait(step.template)
         if match is None:
-            log.warning("[%s] không thấy %s → bỏ lượt này", step.name, step.template)
+            log.warning("[%s] %s not found - skipping this march", step.name, step.template)
             return False
 
         for attempt in range(self.cfg.retries + 1):
@@ -114,8 +114,8 @@ class RallyRunner:
 
             if attempt < self.cfg.retries:
                 log.warning(
-                    "[%s] click xong chưa tới %s (lần %d/%d) → thử lại",
-                    step.name, step.expect or f"lúc {step.template} biến mất",
+                    "[%s] clicked but did not reach %s (attempt %d/%d) - retrying",
+                    step.name, step.expect or f"{step.template} disappearing",
                     attempt + 1, self.cfg.retries,
                 )
                 if self.should_stop():
@@ -123,18 +123,18 @@ class RallyRunner:
                 again = self._find(step.template)
                 if again is None:
                     # Nút biến mất mà màn hình kế cũng chưa hiện → đang chuyển cảnh.
-                    log.warning("[%s] %s cũng biến mất, chờ thêm", step.name, step.template)
+                    log.warning("[%s] %s vanished too - waiting for the transition", step.name, step.template)
                     return self._reached(step)
                 match = again
 
-        log.error("[%s] thất bại sau %d lần click", step.name, self.cfg.retries + 1)
+        log.error("[%s] failed after %d clicks", step.name, self.cfg.retries + 1)
         return False
 
     # ---------- một lượt march ----------
 
     def march_once(self) -> bool:
         if not self.focus():
-            log.debug("Không đưa được cửa sổ lên trước — click đầu có thể bị nuốt")
+            log.debug("Could not raise the emulator window - the first click may be swallowed")
         for step in STEPS:
             if self.should_stop():
                 return False
@@ -142,15 +142,15 @@ class RallyRunner:
                 self.marches_failed += 1
                 return False
         self.marches_done += 1
-        log.info("March xong (tổng %d thành công / %d hỏng)", self.marches_done, self.marches_failed)
+        log.info("March done (%d succeeded / %d failed)", self.marches_done, self.marches_failed)
         return True
 
     def recover(self) -> bool:
         """Sau một lượt hỏng: chờ quay lại được world map thì mới đi tiếp."""
-        log.info("Đang tìm đường về world map...")
+        log.info("Looking for the world map...")
         if self._wait("search_button", timeout=self.cfg.step_timeout * 2) is not None:
             return True
-        log.error("Không về được world map — kiểm tra lại game/cửa sổ giả lập")
+        log.error("Cannot find the world map - check the game and emulator window")
         return False
 
     # ---------- một vòng ----------
@@ -162,7 +162,7 @@ class RallyRunner:
         for i in range(self.cfg.marches_per_round):
             if self.should_stop():
                 break
-            log.info("--- Lượt %d/%d ---", i + 1, self.cfg.marches_per_round)
+            log.info("--- March %d/%d ---", i + 1, self.cfg.marches_per_round)
             if self.march_once():
                 ok += 1
                 consecutive_fail = 0
@@ -170,7 +170,7 @@ class RallyRunner:
 
             consecutive_fail += 1
             if consecutive_fail >= MAX_CONSECUTIVE_FAILURES:
-                log.error("Hỏng %d lượt liên tiếp → bỏ vòng này, chờ vòng sau", consecutive_fail)
+                log.error("%d marches failed in a row - skipping to the next cycle", consecutive_fail)
                 break
             if not self.recover():
                 break
@@ -183,7 +183,7 @@ class RallyRunner:
             if self.should_stop():
                 break
             log.info(
-                "Vòng xong: %d/%d lượt. Chờ %g phút.",
+                "Cycle done: %d/%d marches. Waiting %g minutes.",
                 ok, self.cfg.marches_per_round, self.cfg.wait_minutes,
             )
             if not self.sleep(self.cfg.wait_seconds):

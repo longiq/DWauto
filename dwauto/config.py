@@ -36,7 +36,12 @@ class Config:
     template_width: int = 506
     adb_host: str = "127.0.0.1"
     adb_port: int = 5555
+    thresholds: dict[str, float] = field(default_factory=dict)
     path: Path = field(default=Path("config.yaml"))
+
+    def threshold_for(self, template: str) -> float:
+        """Ngưỡng riêng của một nút, không khai thì dùng ngưỡng chung."""
+        return self.thresholds.get(template, self.threshold)
 
     @property
     def wait_seconds(self) -> float:
@@ -103,9 +108,17 @@ def load_config(path: str | Path = "config.yaml", check_templates: bool = True) 
     if adb_port < 0 or adb_port > 65535:
         raise ConfigError(f"'capture.adb_port' không hợp lệ: {adb_port}")
 
-    threshold = float(_get(_get(raw, "match", "config"), "threshold", "match"))
+    match = _get(raw, "match", "config")
+    threshold = float(_get(match, "threshold", "match"))
     if not 0.0 < threshold <= 1.0:
         raise ConfigError(f"'match.threshold' phải trong (0, 1], đang là {threshold}")
+
+    thresholds = {}
+    for name, value in (match.get("thresholds") or {}).items():
+        v = float(value)
+        if not 0.0 < v <= 1.0:
+            raise ConfigError(f"'match.thresholds.{name}' phải trong (0, 1], đang là {v}")
+        thresholds[str(name)] = v
 
     tpl_raw = _get(raw, "templates", "config")
     if not isinstance(tpl_raw, dict):
@@ -153,5 +166,6 @@ def load_config(path: str | Path = "config.yaml", check_templates: bool = True) 
         template_width=template_width,
         adb_host=str(capture.get("adb_host", "127.0.0.1")),
         adb_port=adb_port,
+        thresholds=thresholds,
         path=p,
     )

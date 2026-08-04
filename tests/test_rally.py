@@ -235,7 +235,7 @@ def test_dry_run_khong_dung_toi_pyautogui(caplog):
     with caplog.at_level("INFO"):
         assert m.click(500, 400, label="march") == (500, 400)
     assert m._pyautogui is None  # không import, không chạm chuột thật
-    assert "sẽ click ở (500, 400)" in caplog.text
+    assert "would click at (500, 400)" in caplog.text
 
 
 @pytest.mark.parametrize("offset", [0, 1, 5])

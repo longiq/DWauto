@@ -1,5 +1,5 @@
 mss>=9.0.1
-opencv-python>=4.9.0
+opencv-python-headless>=4.9.0   # không dùng hàm GUI của OpenCV; bản headless nhẹ hơn ~70MB khi đóng gói
 numpy>=1.26.0
 pyautogui>=0.9.54
 pynput>=1.7.6

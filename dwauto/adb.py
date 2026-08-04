@@ -41,7 +41,7 @@ def connect(host: str = "127.0.0.1", port: int = DEFAULT_PORT, timeout: float = 
     try:
         dev.connect(auth_timeout_s=timeout)
     except Exception as exc:
-        raise AdbUnavailable(f"Không kết nối được ADB {host}:{port} ({exc})") from exc
+        raise AdbUnavailable(f"Cannot connect to ADB at {host}:{port} ({exc})") from exc
     return dev
 
 
@@ -114,10 +114,10 @@ class AdbScreen:
             )
         except Exception as exc:
             self.close()
-            raise AdbUnavailable(f"screencap thất bại: {exc}") from exc
+            raise AdbUnavailable(f"screencap failed: {exc}") from exc
         img = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
         if img is None:
-            raise AdbUnavailable(f"screencap trả về dữ liệu không phải ảnh ({len(png)} byte)")
+            raise AdbUnavailable(f"screencap returned non-image data ({len(png)} bytes)")
         self.raw_size = (img.shape[1], img.shape[0])
         return img
 
@@ -178,8 +178,8 @@ class AdbScreen:
         if not self._warned_titlebar and not (-2 <= bar <= 120):
             self._warned_titlebar = True
             log.warning(
-                "Thanh tiêu đề suy ra %.0fpx — bất thường. Cửa sổ %dx%d có thể không "
-                "cùng tỉ lệ với màn Android %dx%d (xoay ngang? có viền?). Click có thể lệch.",
+                "Title bar computed as %.0fpx, which is unusual. Window %dx%d may not match "
+                "the Android screen ratio %dx%d (landscape? extra chrome?). Clicks may be off.",
                 bar, win.width, win.height, raw_w, raw_h,
             )
 

@@ -53,7 +53,7 @@ class Mouse:
         cx, cy = self.jitter(x, y)
         tag = f" [{label}]" if label else ""
         if self.dry_run:
-            log.info("DRY-RUN: sẽ click ở (%d, %d)%s", cx, cy, tag)
+            log.info("DRY-RUN: would click at (%d, %d)%s", cx, cy, tag)
             return cx, cy
 
         log.info("click (%d, %d)%s", cx, cy, tag)
