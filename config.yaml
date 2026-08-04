@@ -1,0 +1,44 @@
+# Sinh từ recordings_mac/ (macOS + BlueStacks Air, 04/08/2026).
+# Đổi máy / đổi kích thước cửa sổ giả lập → phải ghi lại template.
+
+capture:
+  # adb    = chụp thẳng từ Android. Cửa sổ để ĐÂU, TO NHỎ ra sao cũng chạy, và
+  #          không cần quyền Screen Recording trên macOS. (khuyến nghị)
+  # screen = chụp màn hình máy, phải khai báo region cố định bên dưới.
+  backend: adb
+
+  window_title: BlueStacks   # dò cửa sổ theo tên, để quy đổi toạ độ lúc click
+  template_width: 506        # bề ngang ảnh lúc cắt template — ĐỪNG đổi nếu không cắt lại
+  adb_host: 127.0.0.1
+  adb_port: 5555             # 0 = tự dò các cổng giả lập thường dùng
+
+  # Chỉ dùng khi backend=screen. Đo lại bằng: python recorder.py --pick-region
+  region: [149, 84, 506, 932]
+
+match:
+  threshold: 0.85          # điểm khớp thật đo được: 1.00 đúng nút, ≤0.45 nút khác
+  thresholds:              # ngưỡng riêng cho nút khó
+    # Kính lúp vẽ đè thẳng lên bản đồ, không có nền riêng: chat trong game chạy
+    # qua phía sau làm điểm rớt còn ~0.86. Đo được: có nút 0.86-1.00, không có 0.53.
+    search_button: 0.75
+
+templates:
+  search_button: templates/search_button.png    # kính lúp trên world map
+  search_confirm: templates/search_confirm.png  # nút Search trong panel Rally
+  rally_button: templates/rally_button.png      # nút Rally tròn trên popup mục tiêu
+  march_button: templates/march_button.png      # nút March
+
+rally:
+  marches_per_round: 3     # 3 lượt liên tiếp cho 3 đội quân
+  wait_minutes: 5          # chờ bao lâu trước khi bắt đầu vòng kế — CHỈNH THEO THỜI GIAN RALLY CỦA BẠN
+
+timing:
+  step_timeout: 15.0       # chờ tối đa (giây) để tới màn hình kế sau một click.
+                           # Cần rộng tay: sau March game chạy animation bay tới điểm tập kết.
+  poll_interval: 0.4       # nhịp quét template (backend adb tự tốn ~0.7s mỗi ảnh)
+  retries: 2               # số lần click lại nếu click bị nuốt / trượt
+  click_delay: [0.35, 0.9] # nghỉ ngẫu nhiên sau mỗi click (giây)
+
+click:
+  offset_px: 4             # lệch ngẫu nhiên ±px quanh tâm nút
+  move_duration: [0.08, 0.2]

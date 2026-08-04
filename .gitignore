@@ -1,0 +1,13 @@
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# output của recorder (ảnh chụp màn hình, dữ liệu ghi)
+recordings*/
+*.log
+
+# đóng gói
+build/
+dist/
+*.spec
