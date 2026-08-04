@@ -122,6 +122,12 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="DWauto — auto rally cho Darkwar Survival")
     p.add_argument("--config", default="config.yaml")
     p.add_argument("--dry-run", action="store_true", help="chỉ báo nhận diện nút, không click")
+    p.add_argument(
+        "--marches",
+        type=int,
+        default=0,
+        help="chạy ngay N lượt march rồi thoát (không cần phím tắt) — dùng để chạy thử",
+    )
     p.add_argument("--log-file", default="dwauto.log", help="'' để tắt ghi log ra file")
     p.add_argument("--start-key", default="f8")
     p.add_argument("--quit-key", default="esc")
@@ -152,6 +158,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         with screen:
             return dry_run(cfg, screen, mouse)
+
+    if args.marches > 0:
+        runner = RallyRunner(screen, mouse, cfg)
+        logging.info("Chạy thử %d lượt march, bắt đầu ngay.", args.marches)
+        try:
+            for i in range(args.marches):
+                logging.info("--- Lượt %d/%d ---", i + 1, args.marches)
+                if not runner.march_once() and not runner.recover():
+                    break
+        finally:
+            screen.close()
+            logging.info(
+                "Tổng kết: %d lượt thành công, %d lượt hỏng",
+                runner.marches_done, runner.marches_failed,
+            )
+        return 0 if runner.marches_done == args.marches else 1
 
     hotkeys = HotkeyControl(args.start_key.lower(), args.quit_key.lower())
     hotkeys.start()
