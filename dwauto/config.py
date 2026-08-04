@@ -31,6 +31,11 @@ class Config:
     click_delay: tuple[float, float]
     offset_px: int
     move_duration: tuple[float, float]
+    backend: str = "adb"
+    window_title: str = "BlueStacks"
+    template_width: int = 506
+    adb_host: str = "127.0.0.1"
+    adb_port: int = 5555
     path: Path = field(default=Path("config.yaml"))
 
     @property
@@ -74,12 +79,29 @@ def load_config(path: str | Path = "config.yaml", check_templates: bool = True) 
     if not isinstance(raw, dict):
         raise ConfigError(f"Config phải là một mapping, đang là {type(raw).__name__}")
 
-    reg = _get(_get(raw, "capture", "config"), "region", "capture")
-    if not isinstance(reg, (list, tuple)) or len(reg) != 4:
-        raise ConfigError("'capture.region' phải là [left, top, width, height]")
-    left, top, width, height = (int(v) for v in reg)
-    if width <= 0 or height <= 0:
-        raise ConfigError(f"'capture.region' có width/height không hợp lệ: {width}x{height}")
+    capture = _get(raw, "capture", "config")
+    backend = str(capture.get("backend", "adb")).lower()
+    if backend not in ("adb", "screen"):
+        raise ConfigError(f"'capture.backend' phải là 'adb' hoặc 'screen', đang là {backend!r}")
+
+    # region chỉ bắt buộc với backend=screen; backend=adb tự dò cửa sổ.
+    reg = capture.get("region")
+    if backend == "screen" and reg is None:
+        raise ConfigError("backend 'screen' cần 'capture.region'")
+    if reg is None:
+        left = top = 0
+        width = height = 1
+    else:
+        if not isinstance(reg, (list, tuple)) or len(reg) != 4:
+            raise ConfigError("'capture.region' phải là [left, top, width, height]")
+        left, top, width, height = (int(v) for v in reg)
+        if width <= 0 or height <= 0:
+            raise ConfigError(f"'capture.region' có width/height không hợp lệ: {width}x{height}")
+
+    template_width = int(_positive(capture.get("template_width", 506), "capture.template_width", int))
+    adb_port = int(capture.get("adb_port", 5555))
+    if adb_port < 0 or adb_port > 65535:
+        raise ConfigError(f"'capture.adb_port' không hợp lệ: {adb_port}")
 
     threshold = float(_get(_get(raw, "match", "config"), "threshold", "match"))
     if not 0.0 < threshold <= 1.0:
@@ -126,5 +148,10 @@ def load_config(path: str | Path = "config.yaml", check_templates: bool = True) 
         click_delay=_pair(timing.get("click_delay", [0.3, 0.8]), "timing.click_delay"),
         offset_px=offset,
         move_duration=_pair(click.get("move_duration", [0.08, 0.2]), "click.move_duration"),
+        backend=backend,
+        window_title=str(capture.get("window_title", "BlueStacks")),
+        template_width=template_width,
+        adb_host=str(capture.get("adb_host", "127.0.0.1")),
+        adb_port=adb_port,
         path=p,
     )

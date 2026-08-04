@@ -2,8 +2,17 @@
 # Đổi máy / đổi kích thước cửa sổ giả lập → phải ghi lại template.
 
 capture:
-  # Vùng cửa sổ BlueStacks, theo TOẠ ĐỘ CHUỘT: [left, top, width, height].
-  # Đo lại bằng: python recorder.py --pick-region
+  # adb    = chụp thẳng từ Android. Cửa sổ để ĐÂU, TO NHỎ ra sao cũng chạy, và
+  #          không cần quyền Screen Recording trên macOS. (khuyến nghị)
+  # screen = chụp màn hình máy, phải khai báo region cố định bên dưới.
+  backend: adb
+
+  window_title: BlueStacks   # dò cửa sổ theo tên, để quy đổi toạ độ lúc click
+  template_width: 506        # bề ngang ảnh lúc cắt template — ĐỪNG đổi nếu không cắt lại
+  adb_host: 127.0.0.1
+  adb_port: 5555             # 0 = tự dò các cổng giả lập thường dùng
+
+  # Chỉ dùng khi backend=screen. Đo lại bằng: python recorder.py --pick-region
   region: [149, 84, 506, 932]
 
 match:
@@ -20,8 +29,9 @@ rally:
   wait_minutes: 5          # chờ bao lâu trước khi bắt đầu vòng kế — CHỈNH THEO THỜI GIAN RALLY CỦA BẠN
 
 timing:
-  step_timeout: 8.0        # chờ tối đa (giây) để màn hình kế tiếp hiện ra sau một click
-  poll_interval: 0.4       # nhịp quét template
+  step_timeout: 15.0       # chờ tối đa (giây) để tới màn hình kế sau một click.
+                           # Cần rộng tay: sau March game chạy animation bay tới điểm tập kết.
+  poll_interval: 0.4       # nhịp quét template (backend adb tự tốn ~0.7s mỗi ảnh)
   retries: 2               # số lần click lại nếu click bị nuốt / trượt
   click_delay: [0.35, 0.9] # nghỉ ngẫu nhiên sau mỗi click (giây)
 

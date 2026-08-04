@@ -23,14 +23,16 @@ log = logging.getLogger(__name__)
 class Step(NamedTuple):
     name: str
     template: str  # nút cần click (cũng là dấu hiệu "đang ở đúng màn hình")
-    expect: str  # template phải hiện ra sau khi click thành công
+    expect: str | None  # template phải hiện sau click; None = chờ nút vừa bấm biến mất
 
 
 STEPS = (
     Step("search", "search_button", "search_confirm"),
     Step("confirm", "search_confirm", "rally_button"),
     Step("rally", "rally_button", "march_button"),
-    Step("march", "march_button", "search_button"),
+    # Bấm March xong game chạy animation bay tới điểm tập kết, world map chưa hiện
+    # ngay. Dấu hiệu đáng tin là panel March đóng lại, không phải map xuất hiện.
+    Step("march", "march_button", None),
 )
 
 # Hỏng liên tiếp bấy nhiêu lượt thì bỏ vòng, chờ tới vòng sau. Không có chặn này thì
@@ -39,11 +41,19 @@ MAX_CONSECUTIVE_FAILURES = 2
 
 
 class RallyRunner:
-    def __init__(self, screen, mouse, cfg, should_stop: Callable[[], bool] | None = None):
+    def __init__(
+        self,
+        screen,
+        mouse,
+        cfg,
+        should_stop: Callable[[], bool] | None = None,
+        focus: Callable[[], bool] | None = None,
+    ):
         self.screen = screen
         self.mouse = mouse
         self.cfg = cfg
         self.should_stop = should_stop or (lambda: False)
+        self.focus = focus or (lambda: True)
         self.marches_done = 0
         self.marches_failed = 0
 
@@ -62,6 +72,21 @@ class RallyRunner:
 
     def _find(self, name: str):
         return self.screen.find(self._tpl(name), threshold=self.cfg.threshold)
+
+    def _wait_gone(self, name: str) -> bool:
+        """Chờ tới khi nút biến mất — dùng cho bước cuối, xem như click đã ăn."""
+        deadline = time.monotonic() + self.cfg.step_timeout
+        while True:
+            if self._find(name) is None:
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(self.cfg.poll_interval)
+
+    def _reached(self, step: Step) -> bool:
+        if step.expect is None:
+            return self._wait_gone(step.template)
+        return self._wait(step.expect) is not None
 
     def sleep(self, seconds: float) -> bool:
         """Nghỉ nhưng vẫn phản hồi lệnh dừng. Trả False nếu bị yêu cầu dừng."""
@@ -84,13 +109,14 @@ class RallyRunner:
             mx, my = self.screen.to_mouse(match.x, match.y)
             self.mouse.click(mx, my, label=f"{step.name}/{step.template}")
 
-            if self._wait(step.expect) is not None:
+            if self._reached(step):
                 return True
 
             if attempt < self.cfg.retries:
                 log.warning(
-                    "[%s] click xong không thấy %s (lần %d/%d) → thử lại",
-                    step.name, step.expect, attempt + 1, self.cfg.retries,
+                    "[%s] click xong chưa tới %s (lần %d/%d) → thử lại",
+                    step.name, step.expect or f"lúc {step.template} biến mất",
+                    attempt + 1, self.cfg.retries,
                 )
                 if self.should_stop():
                     return False
@@ -98,9 +124,7 @@ class RallyRunner:
                 if again is None:
                     # Nút biến mất mà màn hình kế cũng chưa hiện → đang chuyển cảnh.
                     log.warning("[%s] %s cũng biến mất, chờ thêm", step.name, step.template)
-                    if self._wait(step.expect) is not None:
-                        return True
-                    return False
+                    return self._reached(step)
                 match = again
 
         log.error("[%s] thất bại sau %d lần click", step.name, self.cfg.retries + 1)
@@ -109,6 +133,8 @@ class RallyRunner:
     # ---------- một lượt march ----------
 
     def march_once(self) -> bool:
+        if not self.focus():
+            log.debug("Không đưa được cửa sổ lên trước — click đầu có thể bị nuốt")
         for step in STEPS:
             if self.should_stop():
                 return False

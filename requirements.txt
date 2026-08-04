@@ -4,6 +4,7 @@ numpy>=1.26.0
 pyautogui>=0.9.54
 pynput>=1.7.6
 PyYAML>=6.0.1
+adb-shell>=0.4.4      # chụp màn hình thẳng từ Android (backend adb)
 
 # test (chạy được không cần màn hình)
 pytest>=7.0

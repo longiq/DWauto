@@ -118,9 +118,9 @@ def test_thu_tu_buoc_dung_spec():
     assert [s.template for s in STEPS] == [
         "search_button", "search_confirm", "rally_button", "march_button",
     ]
-    assert [s.expect for s in STEPS] == [
-        "search_confirm", "rally_button", "march_button", "search_button",
-    ]
+    # Bước cuối expect=None: xác nhận bằng việc nút March biến mất, vì world map
+    # chưa hiện ngay sau khi bấm (game chạy animation bay tới điểm tập kết).
+    assert [s.expect for s in STEPS] == ["search_confirm", "rally_button", "march_button", None]
 
 
 def test_ba_luot_moi_vong():
@@ -249,3 +249,46 @@ def test_jitter_nam_trong_bien(offset):
 def test_jitter_that_su_ngau_nhien():
     m = Mouse(offset_px=4, rng=random.Random(1))
     assert len({m.jitter(300, 200) for _ in range(40)}) > 1
+
+
+# ---------- bước cuối xác nhận bằng "nút biến mất" ----------
+
+
+class SlowMapGame(FakeGame):
+    """Sau March, world map hiện chậm (animation bay tới điểm tập kết)."""
+
+    def __init__(self, delay_polls: int = 5):
+        super().__init__()
+        self.delay_polls = delay_polls
+        self.in_transition = 0
+
+    def click(self, mx, my, label=""):
+        was = self.state
+        r = super().click(mx, my, label)
+        if was == "march" and self.state == "world_map":
+            self.in_transition = self.delay_polls  # chưa nút nào hiện
+        return r
+
+    def find(self, template, threshold=0.85, region=None, screen=None):
+        if self.in_transition > 0:
+            self.captures += 1
+            self.in_transition -= 1
+            return None  # màn chuyển cảnh: không thấy nút nào cả
+        return super().find(template, threshold, region, screen)
+
+
+def test_march_tinh_la_xong_khi_panel_dong_du_map_chua_hien():
+    """Lỗi thật đã gặp: bắt phải thấy world map ngay sau March → báo hỏng oan."""
+    game = SlowMapGame(delay_polls=5)
+    r = runner(game, make_cfg(step_timeout=0.3, poll_interval=0.01))
+    assert r.march_once() is True
+    assert (r.marches_done, r.marches_failed) == (1, 0)
+    assert len(game.clicks) == 4  # không click lại thừa
+
+
+def test_march_van_hong_neu_panel_khong_dong():
+    """Panel March không đóng (hết quân, lỗi trong game) → phải báo hỏng."""
+    game = FakeGame(dead_button="march_button")
+    r = runner(game, make_cfg(retries=1))
+    assert r.march_once() is False
+    assert game.state == "march"

@@ -133,6 +133,26 @@ Lưu ý toạ độ: `find/wait_for` trả **pixel của ảnh chụp**; trên R
 scaling >100% con số này **không phải** toạ độ chuột — luôn đi qua `to_mouse()` trước
 khi click. `Screen.scale` được đo lại ở mỗi `capture()`.
 
+### Hai nguồn ảnh (`capture.backend`)
+
+| | `adb` (mặc định) | `screen` |
+|---|---|---|
+| Cửa sổ giả lập để **đâu** trên màn hình | chạy | phải khai `region` cố định |
+| Cửa sổ **đổi kích thước** | chạy | chết |
+| Cửa sổ bị che một phần | vẫn *nhìn* được | chết |
+| Quyền Screen Recording (macOS) | **không cần** | cần |
+| Tốc độ mỗi ảnh | ~0.7s | ~0.05s |
+
+`adb` chụp thẳng từ Android nên ảnh luôn cùng độ phân giải, không phụ thuộc cửa sổ.
+Vị trí cửa sổ chỉ dùng lúc **click**, và được dò lại mỗi lần — kéo cửa sổ đi giữa
+chừng vẫn đúng.
+
+**Giới hạn đã đo trên BlueStacks Air 5.21.770 (macOS):** adbd của nó là bản shim, chỉ
+chạy `getprop`, `dumpsys`, `screencap`. `input tap` bị chặn (`error: closed`), nên
+click vẫn phải qua chuột thật → **cửa sổ vẫn phải hiện ra và không bị che lúc click**.
+Chạy hoàn toàn ẩn cần emulator không khoá ADB shell (BlueStacks trên Windows, hoặc
+giả lập khác).
+
 ### Chạy tool
 
 ```bash
