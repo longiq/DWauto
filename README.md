@@ -133,10 +133,36 @@ Lưu ý toạ độ: `find/wait_for` trả **pixel của ảnh chụp**; trên R
 scaling >100% con số này **không phải** toạ độ chuột — luôn đi qua `to_mouse()` trước
 khi click. `Screen.scale` được đo lại ở mỗi `capture()`.
 
-Các thành phần còn lại (`actions.py`, `rally.py`, `main.py`) chưa triển khai.
+### Chạy tool
+
+```bash
+python main.py --dry-run    # chỉ báo thấy nút gì, ở đâu — KHÔNG click
+python main.py              # F8 chạy/dừng, Esc thoát
+```
+
+Chu trình (đo từ bản ghi thật, **không có bước chọn team** — game tự lấy đội quân rảnh):
+
+```
+world map ──search_button──▶ panel Rally ──search_confirm──▶ popup mục tiêu
+          ──rally_button──▶ panel March ──march_button──▶ world map
+```
+
+Chạy `rally.marches_per_round` lượt liên tiếp (mặc định 3, cho 3 đội quân) rồi chờ
+`rally.wait_minutes` phút và lặp lại. **`wait_minutes` mặc định là 5 — chỉnh trong
+`config.yaml` cho khớp thời gian rally của bạn.**
+
+Sau mỗi click, tool **kiểm chứng** màn hình kế tiếp đã hiện chưa; chưa thì click lại
+(tối đa `timing.retries` lần). Nhờ vậy chịu được click bị macOS nuốt khi BlueStacks
+chưa được focus — lỗi này có thật, gặp ngay lúc ghi. Hỏng 2 lượt liên tiếp thì bỏ vòng
+và chờ tới vòng sau, không click vô ích vào game đang kẹt.
+
+Dừng khẩn cấp: kéo chuột lên **góc trên-trái màn hình** (pyautogui FAILSAFE), hoặc `Esc`.
+
+**Cửa sổ giả lập phải nằm trên cùng và không bị che** — `mss` chụp theo màn hình, cửa
+sổ nào đè lên là chụp trúng cửa sổ đó.
 
 ## Test
 
 ```bash
-pytest              # 26 test, chạy bằng ảnh tổng hợp, không cần màn hình
+pytest              # 65 test, chạy bằng ảnh tổng hợp + game giả, không cần màn hình
 ```
