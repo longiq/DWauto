@@ -1,7 +1,7 @@
 # Spec: DWauto — tool auto rally cho Darkwar Survival
 
-> Tài liệu bàn giao. Phần macOS đã làm xong và chạy thật; phần Windows là việc kế tiếp,
-> viết cho phiên **Claude CLI cục bộ trên máy Windows** thực thi.
+> Tài liệu bàn giao. Mục tiêu "chạy nền hoàn toàn" đã đạt được trên macOS qua
+> MuMu Player — không cần đường Windows nữa (xem cập nhật 16/08/2026 cuối file).
 > Cập nhật 05/08/2026.
 
 ## Tình trạng hiện tại
@@ -10,10 +10,10 @@
 |---|---|
 | Ghi thao tác (`recorder.py`) | xong, chạy được macOS + Windows |
 | Nhận diện nút (`dwauto/screen.py`) | xong, 67 test |
-| Chụp qua ADB (`dwauto/adb.py`) | xong, verify trên BlueStacks Air |
+| Chụp qua ADB (`dwauto/adb.py`) | xong, verify trên BlueStacks Air + MuMu Player |
 | Vòng lặp rally (`dwauto/rally.py`) | xong, **3/3 lượt thật thành công** |
 | App GUI (`app.py`) + đóng gói (`build.py`) | xong, `dist/DWauto.app` 62MB nén |
-| Click qua ADB (chạy nền hoàn toàn) | **chưa làm — việc chính của phiên Windows** |
+| Click qua ADB (chạy nền hoàn toàn) | **xong trên MuMu Player (16/08/2026) — xem cuối file** |
 
 ## Chu trình rally (đo từ bản ghi thật, KHÔNG theo phỏng đoán ban đầu)
 
@@ -165,3 +165,48 @@ pytest                      # 67 test, ảnh tổng hợp + game giả, không c
 python main.py --dry-run    # báo thấy nút gì, ở đâu, sẽ click chỗ nào — không click
 python main.py --marches 1  # chạy thật đúng một lượt
 ```
+
+## Cập nhật 16/08/2026 — MuMu Player: đạt "chạy nền hoàn toàn" trên macOS, bỏ đường Windows
+
+Test trực tiếp `adb shell input tap` trên **MuMu Player** (không phải BlueStacks) —
+**chạy được**, không bị `error: closed` như BlueStacks Air. Xác nhận bằng UI thật
+đổi màn hình sau tap, không chỉ exit code 0.
+
+**AdbMouse đã hiện thực** (đúng việc mà mục "Việc của phiên Windows" ở trên định làm
+cho Windows, giờ làm luôn trên macOS):
+
+- `dwauto/actions.py`: thêm `AdbMouse` — cùng giao diện `click(x, y, label)` với
+  `Mouse`, nhưng gọi `adb shell input tap` qua subprocess (không dùng `adb_shell`
+  Python, xem lý do bên dưới). Có `uses_device_coords = True` để `rally.py` phân biệt.
+- `dwauto/adb.py`: thêm `AdbScreen.to_device(x, y)` — quy đổi toạ độ template sang
+  toạ độ Android thật, không cần dò cửa sổ (khác `to_mouse`).
+- `dwauto/rally.py`: `do_step()` chọn `to_device` hay `to_mouse` theo
+  `getattr(self.mouse, "uses_device_coords", False)`.
+- `config.yaml`: `click.backend: adb` (mặc định mới). `mouse` vẫn còn cho BlueStacks
+  Air hoặc máy nào ADB bị khoá.
+- `main.py`: khi `click.backend == adb`, bỏ hẳn `focus_window()` (`focus()` trả
+  `True` ngay) — verify chạy đúng **khi cửa sổ MuMu đã thu nhỏ hoàn toàn**.
+
+**Bug thư viện `adb_shell` (Python thuần) với MuMu — ĐỪNG dùng lại `device.exec_out`
+trực tiếp cho MuMu:** `grab_raw()` gốc dùng `adb_shell.AdbDeviceTcp.exec_out` để
+chụp màn hình, treo tới hết timeout (25s) trên MuMu dù `adb` binary thật trả kết quả
+trong <0.4s cho đúng lệnh đó. Chưa rõ nguyên nhân sâu (nghi ngờ khác biệt nhỏ trong
+cách adbd của MuMu trả stream so với AOSP/BlueStacks), không đáng để đào sâu — fix
+bằng cách thêm `capture.adb_binary` (đường dẫn `adb` thật, MuMu tự kèm sẵn trong
+`MuMuPlayer Pro.app/Contents/MacOS/MuMu Android Device.app/Contents/MacOS/tools/adb`)
+và `AdbScreen._grab_raw_via_binary()` gọi qua `subprocess` thay vì thư viện. Bỏ trống
+`adb_binary` thì quay lại đường `adb_shell` cũ (BlueStacks Air vẫn dùng đường này).
+`AdbMouse` dùng luôn cùng cơ chế subprocess cho nhất quán.
+
+**Template phải ghi lại theo từng emulator/tài khoản** (đã biết trước, đúng như dự
+đoán): cắt template MuMu bằng cách chụp burst qua ADB (1 tấm/giây) trong lúc tự tay
+thao tác 1 chu trình rally thật, chọn khung đúng bằng mắt rồi crop bằng script Python
+(resize ảnh raw về `template_width` trước khi crop, để khớp đúng không gian toạ độ
+runtime dùng) — nhanh hơn và đỡ phụ thuộc hơn `recorder.py` (cần quyền Accessibility
+cho tiến trình Python thật thi, xin quyền qua System Settings không đủ, phải quit hẳn
+app cha rồi mở lại mới nhận — nếu vẫn không nhận thì đường vòng burst-capture này là
+lựa chọn tốt, không cần Accessibility gì cả vì không dùng `pynput`).
+
+**MuMu nhẹ hơn BlueStacks đáng kể** (RAM idle <400MB so với ~740MB). Máy này chuyển
+hẳn từ Parallels Windows VM (36GB) sang MuMu cho DWauto — không còn lý do giữ VM
+Windows cho việc này nữa.

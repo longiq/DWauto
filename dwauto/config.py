@@ -36,6 +36,8 @@ class Config:
     template_width: int = 506
     adb_host: str = "127.0.0.1"
     adb_port: int = 5555
+    adb_binary: str | None = None
+    click_backend: str = "mouse"
     thresholds: dict[str, float] = field(default_factory=dict)
     path: Path = field(default=Path("config.yaml"))
 
@@ -148,6 +150,10 @@ def load_config(path: str | Path = "config.yaml", check_templates: bool = True) 
     if wait_minutes < 0:
         raise ConfigError(f"'rally.wait_minutes' không được âm, đang là {wait_minutes}")
 
+    click_backend = str(click.get("backend", "mouse"))
+    if click_backend not in ("mouse", "adb"):
+        raise ConfigError(f"'click.backend' phải là 'mouse' hoặc 'adb', đang là {click_backend!r}")
+
     return Config(
         region={"left": left, "top": top, "width": width, "height": height},
         threshold=threshold,
@@ -166,6 +172,8 @@ def load_config(path: str | Path = "config.yaml", check_templates: bool = True) 
         template_width=template_width,
         adb_host=str(capture.get("adb_host", "127.0.0.1")),
         adb_port=adb_port,
+        adb_binary=(str(capture["adb_binary"]) if capture.get("adb_binary") else None),
+        click_backend=click_backend,
         thresholds=thresholds,
         path=p,
     )

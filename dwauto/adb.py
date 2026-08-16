@@ -73,12 +73,14 @@ class AdbScreen:
         port: int = DEFAULT_PORT,
         window_title: str = "BlueStacks",
         device=None,
+        adb_binary: str | None = None,
     ):
         self.template_width = template_width
         self.host = host
         self.port = port
         self.window_title = window_title
         self._dev = device
+        self.adb_binary = adb_binary
         self.raw_size: tuple[int, int] | None = None  # (w, h) của màn Android
         self._warned_titlebar = False
 
@@ -108,18 +110,42 @@ class AdbScreen:
 
     def grab_raw(self) -> np.ndarray:
         """Ảnh gốc từ Android (BGR), đúng độ phân giải thật của emulator."""
-        try:
-            png = self.device.exec_out(
-                "screencap -p", decode=False, read_timeout_s=25, transport_timeout_s=25
-            )
-        except Exception as exc:
-            self.close()
-            raise AdbUnavailable(f"screencap failed: {exc}") from exc
+        if self.adb_binary:
+            png = self._grab_raw_via_binary()
+        else:
+            try:
+                png = self.device.exec_out(
+                    "screencap -p", decode=False, read_timeout_s=25, transport_timeout_s=25
+                )
+            except Exception as exc:
+                self.close()
+                raise AdbUnavailable(f"screencap failed: {exc}") from exc
         img = cv2.imdecode(np.frombuffer(png, np.uint8), cv2.IMREAD_COLOR)
         if img is None:
             raise AdbUnavailable(f"screencap returned non-image data ({len(png)} bytes)")
         self.raw_size = (img.shape[1], img.shape[0])
         return img
+
+    def _grab_raw_via_binary(self) -> bytes:
+        """Chụp qua adb binary thật (subprocess) thay vì thư viện adb_shell.
+
+        Một số adbd của emulator (đo trên MuMu Player) không tương thích với
+        exec_out của thư viện adb_shell thuần Python — treo tới hết timeout dù
+        adb binary thật trả kết quả trong dưới 1 giây. Dùng khi 'capture.adb_binary'
+        được khai trong config.
+        """
+        import subprocess
+
+        try:
+            proc = subprocess.run(
+                [self.adb_binary, "-s", f"{self.host}:{self.port}", "exec-out", "screencap", "-p"],
+                capture_output=True,
+                timeout=25,
+                check=True,
+            )
+        except Exception as exc:
+            raise AdbUnavailable(f"screencap (adb binary) failed: {exc}") from exc
+        return proc.stdout
 
     def capture(self) -> np.ndarray:
         """Ảnh đã co về đúng tỉ lệ lúc cắt template."""
@@ -185,3 +211,15 @@ class AdbScreen:
 
         th = self.template_width * raw_h / raw_w  # chiều cao ảnh template
         return round(gx + x * gw / self.template_width), round(gy + y * gh / th)
+
+    def to_device(self, x: float, y: float) -> tuple[int, int]:
+        """Toạ độ trong ảnh template → toạ độ Android thật, cho AdbMouse.
+
+        Không cần dò cửa sổ: ảnh ADB luôn đúng độ phân giải thật của emulator,
+        nên chỉ cần nhân theo tỉ lệ template_width / raw_w.
+        """
+        if self.raw_size is None:
+            self.grab_raw()
+        raw_w, raw_h = self.raw_size
+        factor = raw_w / self.template_width
+        return round(x * factor), round(y * factor)

@@ -7,10 +7,13 @@ capture:
   # screen = chụp màn hình máy, phải khai báo region cố định bên dưới.
   backend: adb
 
-  window_title: BlueStacks   # dò cửa sổ theo tên, để quy đổi toạ độ lúc click
+  window_title: Android Device   # dò cửa sổ theo tên, để quy đổi toạ độ lúc click
   template_width: 506        # bề ngang ảnh lúc cắt template — ĐỪNG đổi nếu không cắt lại
   adb_host: 127.0.0.1
-  adb_port: 5555             # 0 = tự dò các cổng giả lập thường dùng
+  adb_port: 26625            # cổng ADB hiện tại của MuMu (đổi mỗi lần Open ADB lại) — 0 = tự dò
+  # adb_shell (thư viện Python thuần) treo tới timeout khi chụp qua MuMu — dùng
+  # thẳng adb binary thật qua subprocess thay thế. Bỏ trống nếu quay lại BlueStacks.
+  adb_binary: "/Applications/MuMuPlayer Pro.app/Contents/MacOS/MuMu Android Device.app/Contents/MacOS/tools/adb"
 
   # Chỉ dùng khi backend=screen. Đo lại bằng: python recorder.py --pick-region
   region: [149, 84, 506, 932]
@@ -40,5 +43,10 @@ timing:
   click_delay: [0.35, 0.9] # nghỉ ngẫu nhiên sau mỗi click (giây)
 
 click:
+  # adb   = tap qua ADB (dùng lại capture.adb_binary/adb_host) — không cần cửa sổ
+  #         hiện/focus, không cần quyền Accessibility. Verify chạy được trên MuMu
+  #         Player (16/08/2026); KHÔNG chạy trên BlueStacks Air (input tap bị khoá).
+  # mouse = click chuột thật qua pyautogui — cần cửa sổ hiện, không bị che.
+  backend: adb
   offset_px: 4             # lệch ngẫu nhiên ±px quanh tâm nút
   move_duration: [0.08, 0.2]

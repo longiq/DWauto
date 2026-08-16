@@ -16,7 +16,7 @@ import threading
 import time
 from pathlib import Path
 
-from dwauto.actions import Mouse
+from dwauto.actions import AdbMouse, Mouse
 from dwauto.config import Config, ConfigError, load_config
 from dwauto.rally import STEPS, RallyRunner
 from dwauto.screen import Screen
@@ -46,13 +46,19 @@ def make_screen(cfg: Config):
         host=cfg.adb_host,
         port=port,
         window_title=cfg.window_title,
+        adb_binary=cfg.adb_binary,
     )
     raw = scr.grab_raw()  # thất bại sớm nếu ADB không dùng được
-    win = find_window(cfg.window_title)
+    try:
+        win = find_window(cfg.window_title)
+        where = f"window '{cfg.window_title}' at ({win.left},{win.top}) {win.width}x{win.height}"
+    except Exception:
+        # click.backend=adb không cần vị trí cửa sổ — cửa sổ thu nhỏ/bị che vẫn
+        # chụp và tap được bình thường qua ADB, chỉ mất thông tin log ở đây.
+        where = f"window '{cfg.window_title}' not found (minimized/hidden — fine for click.backend=adb)"
     logging.info(
-        "Capture source: ADB %s:%d - Android screen %dx%d, window '%s' at (%d,%d) %dx%d",
-        cfg.adb_host, port, raw.shape[1], raw.shape[0], cfg.window_title,
-        win.left, win.top, win.width, win.height,
+        "Capture source: ADB %s:%d - Android screen %dx%d, %s",
+        cfg.adb_host, port, raw.shape[1], raw.shape[0], where,
     )
     return scr
 
@@ -90,9 +96,14 @@ def dry_run(cfg: Config, screen: Screen, mouse: Mouse, rounds: int = 3) -> int:
                          name, loose.score if loose else 0.0, need)
                 continue
             seen_any = True
-            mx, my = screen.to_mouse(m.x, m.y)
-            log.info("  %-15s FOUND score %.2f at image (%d,%d) -> would click at (%d,%d)",
-                     name, m.score, m.x, m.y, mx, my)
+            if getattr(mouse, "uses_device_coords", False):
+                mx, my = screen.to_device(m.x, m.y)
+                kind = "tap"
+            else:
+                mx, my = screen.to_mouse(m.x, m.y)
+                kind = "click"
+            log.info("  %-15s FOUND score %.2f at image (%d,%d) -> would %s at (%d,%d)",
+                     name, m.score, m.x, m.y, kind, mx, my)
         if i < rounds - 1:
             time.sleep(1.0)
 
@@ -182,12 +193,26 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Không mở được nguồn ảnh: {exc}", file=sys.stderr)
         return 2
 
-    mouse = Mouse(
-        offset_px=cfg.offset_px,
-        delay=cfg.click_delay,
-        move_duration=cfg.move_duration,
-        dry_run=args.dry_run,
-    )
+    if cfg.click_backend == "adb":
+        if not cfg.adb_binary:
+            print("Lỗi config: click.backend=adb cần khai 'capture.adb_binary'", file=sys.stderr)
+            return 2
+        mouse = AdbMouse(
+            adb_binary=cfg.adb_binary,
+            host=cfg.adb_host,
+            port=screen.port if hasattr(screen, "port") else cfg.adb_port,
+            offset_px=cfg.offset_px,
+            delay=cfg.click_delay,
+            dry_run=args.dry_run,
+        )
+        logging.info("Click backend: ADB tap (%s) — cửa sổ bị che/thu nhỏ vẫn chạy được.", cfg.adb_binary)
+    else:
+        mouse = Mouse(
+            offset_px=cfg.offset_px,
+            delay=cfg.click_delay,
+            move_duration=cfg.move_duration,
+            dry_run=args.dry_run,
+        )
 
     logging.info(
         "%d marches per cycle, %g minute wait between cycles, match threshold %.2f",
@@ -198,10 +223,15 @@ def main(argv: list[str] | None = None) -> int:
         with screen:
             return dry_run(cfg, screen, mouse)
 
-    from dwauto.window import focus_window
+    if getattr(mouse, "uses_device_coords", False):
+        # AdbMouse tap thẳng vào Android qua ADB — không cần cửa sổ hiện/focus.
+        def focus() -> bool:
+            return True
+    else:
+        from dwauto.window import focus_window
 
-    def focus() -> bool:
-        return focus_window(cfg.window_title)
+        def focus() -> bool:
+            return focus_window(cfg.window_title)
 
     if args.marches > 0:
         runner = RallyRunner(screen, mouse, cfg, focus=focus)

@@ -106,7 +106,10 @@ class RallyRunner:
             return False
 
         for attempt in range(self.cfg.retries + 1):
-            mx, my = self.screen.to_mouse(match.x, match.y)
+            if getattr(self.mouse, "uses_device_coords", False):
+                mx, my = self.screen.to_device(match.x, match.y)
+            else:
+                mx, my = self.screen.to_mouse(match.x, match.y)
             self.mouse.click(mx, my, label=f"{step.name}/{step.template}")
 
             if self._reached(step):
