@@ -249,7 +249,15 @@ class App(tk.Tk):
 
 
 def main() -> int:
-    sys.path.insert(0, str(resource_dir()))
+    if not getattr(sys, "frozen", False):
+        # Chỉ cần khi chạy trực tiếp từ source (`python app.py`), để tìm thấy
+        # package dwauto/ cạnh app.py. Khi đã đóng gói, dwauto đã nằm sẵn trong
+        # PYZ frozen — chèn _MEIPASS vào sys.path lúc này khiến Python thấy cv2
+        # ở CẢ bản frozen lẫn bản rời trên đĩa (do hook PyInstaller giải nén data
+        # files của cv2 ra _MEIPASS), import 2 đường khác nhau → cv2 tự phát hiện
+        # bị nạp đè và báo "recursion is detected during loading of cv2 binary
+        # extensions". Bỏ hẳn dòng này khi frozen là cách sửa đúng gốc.
+        sys.path.insert(0, str(resource_dir()))
     App().mainloop()
     return 0
 
