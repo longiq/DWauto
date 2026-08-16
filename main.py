@@ -28,16 +28,24 @@ def make_screen(cfg: Config):
         logging.info("Capture source: screen grab, fixed region %s", cfg.region)
         return Screen(area=dict(cfg.region))
 
-    from dwauto.adb import AdbScreen, scan_ports
+    from dwauto.adb import AdbScreen, scan_adb_devices, scan_ports
     from dwauto.window import find_window
 
     port = cfg.adb_port
     if port == 0:
-        port = scan_ports(cfg.adb_host)
+        # MuMu Player dùng cổng ngẫu nhiên (không nằm trong COMMON_PORTS cố định
+        # của BlueStacks/LDPlayer/Nox/MEmu) — ưu tiên dò qua `adb devices` thật
+        # khi có adb_binary, đáng tin cậy hơn scan cổng TCP mù (không phân biệt
+        # được cổng "device" thật với cổng control nội bộ đang "offline").
+        if cfg.adb_binary:
+            port = scan_adb_devices(cfg.adb_binary, cfg.adb_host)
+        if port is None:
+            port = scan_ports(cfg.adb_host)
         if port is None:
             raise RuntimeError(
                 "No open ADB port found. Start the emulator, and enable ADB under "
-                "Settings > Advanced if you are on BlueStacks for Windows."
+                "Settings > Advanced if you are on BlueStacks for Windows, or "
+                "Developer > Open ADB if you are on MuMu Player."
             )
         logging.info("Found ADB port: %d", port)
 

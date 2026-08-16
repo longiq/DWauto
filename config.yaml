@@ -10,7 +10,8 @@ capture:
   window_title: Android Device   # dò cửa sổ theo tên, để quy đổi toạ độ lúc click
   template_width: 506        # bề ngang ảnh lúc cắt template — ĐỪNG đổi nếu không cắt lại
   adb_host: 127.0.0.1
-  adb_port: 26625            # cổng ADB hiện tại của MuMu (đổi mỗi lần Open ADB lại) — 0 = tự dò
+  adb_port: 0                # 0 = tự dò qua `adb devices` — MuMu đổi cổng ngẫu nhiên
+                              # mỗi lần Open ADB lại nên không đặt cứng số nữa
   # adb_shell (thư viện Python thuần) treo tới timeout khi chụp qua MuMu — dùng
   # thẳng adb binary thật qua subprocess thay thế. Bỏ trống nếu quay lại BlueStacks.
   adb_binary: "/Applications/MuMuPlayer Pro.app/Contents/MacOS/MuMu Android Device.app/Contents/MacOS/tools/adb"

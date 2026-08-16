@@ -58,6 +58,26 @@ def scan_ports(host: str = "127.0.0.1", ports=COMMON_PORTS) -> int | None:
     return None
 
 
+def scan_adb_devices(adb_binary: str, host: str = "127.0.0.1") -> int | None:
+    """Dò cổng qua `adb devices` thật — dùng cho MuMu Player, cổng đổi ngẫu nhiên
+    mỗi lần bật lại ADB (Developer → Open ADB), nằm ngoài dải COMMON_PORTS cố định
+    của scan_ports(). Chỉ nhận cổng ở trạng thái "device" (đã bắt tay xong), bỏ qua
+    "offline" (cổng control nội bộ của MuMu, không phải ADB thật).
+    """
+    import re
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            [adb_binary, "devices"], capture_output=True, timeout=10, text=True, check=True,
+        )
+    except Exception:
+        return None
+    pattern = re.compile(rf"^{re.escape(host)}:(\d+)\s+device\b", re.MULTILINE)
+    m = pattern.search(proc.stdout)
+    return int(m.group(1)) if m else None
+
+
 class AdbScreen:
     """Cùng giao diện với Screen (capture/find/wait_for/to_mouse) nhưng chụp qua ADB.
 
