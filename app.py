@@ -82,25 +82,41 @@ class RallyWorker(threading.Thread):
         log = logging.getLogger("app")
         screen = None
         try:
+            from dwauto.actions import AdbMouse, Mouse
             from dwauto.config import load_config
-            from dwauto.actions import Mouse
             from dwauto.rally import RallyRunner
-            from dwauto.window import focus_window
             from main import make_screen
 
             cfg = load_config(resource_dir() / "config.yaml")
             cfg = dataclasses.replace(cfg, wait_minutes=self.minutes)
 
             screen = make_screen(cfg)
-            mouse = Mouse(
-                offset_px=cfg.offset_px,
-                delay=cfg.click_delay,
-                move_duration=cfg.move_duration,
-            )
+            if cfg.click_backend == "adb":
+                mouse = AdbMouse(
+                    adb_binary=cfg.adb_binary,
+                    host=cfg.adb_host,
+                    port=getattr(screen, "port", cfg.adb_port),
+                    offset_px=cfg.offset_px,
+                    delay=cfg.click_delay,
+                )
+            else:
+                mouse = Mouse(
+                    offset_px=cfg.offset_px,
+                    delay=cfg.click_delay,
+                    move_duration=cfg.move_duration,
+                )
+
+            if getattr(mouse, "uses_device_coords", False):
+                focus = lambda: True  # noqa: E731 — AdbMouse không cần cửa sổ hiện/focus
+            else:
+                from dwauto.window import focus_window
+
+                focus = lambda: focus_window(cfg.window_title)  # noqa: E731
+
             runner = RallyRunner(
                 screen, mouse, cfg,
                 should_stop=self.stop_event.is_set,
-                focus=lambda: focus_window(cfg.window_title),
+                focus=focus,
             )
             log.info(
                 "Started — %d marches per cycle, %g minute wait between cycles.",
@@ -203,7 +219,19 @@ class App(tk.Tk):
         minutes = self._read_minutes()
         if minutes is None:
             return
-        if not accessibility_ok():
+
+        # AdbMouse tap qua ADB không đụng chuột thật — không cần quyền Accessibility.
+        # Chỉ bắt buộc quyền này khi config còn dùng click.backend=mouse (BlueStacks...).
+        from dwauto.config import ConfigError, load_config
+
+        try:
+            cfg = load_config(resource_dir() / "config.yaml", check_templates=False)
+        except ConfigError as exc:
+            self._set_status(f"Config error: {exc}", error=True)
+            return
+        needs_accessibility = cfg.click_backend != "adb"
+
+        if needs_accessibility and not accessibility_ok():
             accessibility_ok(prompt=True)  # raises the macOS dialog with a settings link
             self._set_status(
                 "Allow DWauto under Privacy & Security → Accessibility, then reopen the app.",
@@ -214,7 +242,9 @@ class App(tk.Tk):
         self.worker.start()
         self.toggle.config(text="Stop")
         self.minutes_entry.config(state="disabled")
-        self._set_status("Running — keep the emulator window visible.")
+        self._set_status(
+            "Running." if not needs_accessibility else "Running — keep the emulator window visible."
+        )
 
     def _on_worker_done(self) -> None:
         error = self.worker.error if self.worker else None
