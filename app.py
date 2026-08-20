@@ -96,6 +96,7 @@ class RallyWorker(threading.Thread):
                     adb_binary=cfg.adb_binary,
                     host=cfg.adb_host,
                     port=getattr(screen, "port", cfg.adb_port),
+                    serial=getattr(screen, "serial", None),
                     offset_px=cfg.offset_px,
                     delay=cfg.click_delay,
                 )

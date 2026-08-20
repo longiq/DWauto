@@ -84,6 +84,7 @@ class AdbMouse:
         adb_binary: str,
         host: str = "127.0.0.1",
         port: int = 5555,
+        serial: str | None = None,
         offset_px: int = 4,
         delay: tuple[float, float] = (0.35, 0.9),
         dry_run: bool = False,
@@ -92,10 +93,16 @@ class AdbMouse:
         self.adb_binary = adb_binary
         self.host = host
         self.port = port
+        self.serial = serial
         self.offset_px = offset_px
         self.delay = delay
         self.dry_run = dry_run
         self.rng = rng or random.Random()
+
+    @property
+    def target(self) -> str:
+        """Chuỗi truyền cho `adb -s` — ưu tiên serial dò được, không thì host:port."""
+        return self.serial or f"{self.host}:{self.port}"
 
     def jitter(self, x: int, y: int) -> tuple[int, int]:
         if self.offset_px <= 0:
@@ -117,7 +124,7 @@ class AdbMouse:
         import subprocess
 
         subprocess.run(
-            [self.adb_binary, "-s", f"{self.host}:{self.port}", "shell", "input", "tap", str(cx), str(cy)],
+            [self.adb_binary, "-s", self.target, "shell", "input", "tap", str(cx), str(cy)],
             capture_output=True,
             timeout=10,
             check=True,

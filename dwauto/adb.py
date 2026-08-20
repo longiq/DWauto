@@ -58,13 +58,21 @@ def scan_ports(host: str = "127.0.0.1", ports=COMMON_PORTS) -> int | None:
     return None
 
 
-def scan_adb_devices(adb_binary: str, host: str = "127.0.0.1") -> int | None:
-    """Dò cổng qua `adb devices` thật — dùng cho MuMu Player, cổng đổi ngẫu nhiên
-    mỗi lần bật lại ADB (Developer → Open ADB), nằm ngoài dải COMMON_PORTS cố định
-    của scan_ports(). Chỉ nhận cổng ở trạng thái "device" (đã bắt tay xong), bỏ qua
-    "offline" (cổng control nội bộ của MuMu, không phải ADB thật).
+def scan_adb_devices(adb_binary: str) -> str | None:
+    """Dò SERIAL thiết bị đang ở trạng thái "device" (đã bắt tay xong) qua
+    `adb devices` thật — bỏ qua "offline" (cổng control nội bộ của MuMu, không
+    phải ADB thật). Dùng cho MuMu Player, cổng/serial đổi mỗi lần bật lại ADB
+    (Developer → Open ADB) hoặc đổi cấu hình instance (RAM/CPU) làm nó khởi động
+    lại — nằm ngoài dải COMMON_PORTS cố định của scan_ports().
+
+    Trả về nguyên serial ở cột đầu, KHÔNG cố ép về số cổng: có lúc là "host:port"
+    (MuMu connect qua TCP), có lúc là "emulator-XXXX" (MuMu/AVD tự đăng ký qua
+    giao thức console chuẩn — gặp thật trên máy này 16/08/2026). Ép về số cổng rồi
+    tự ráp lại "host:port" từng gây lỗi "screencap failed": cổng dò được qua raw
+    TCP probe (scan_ports) có thể đang mở nhưng CHƯA được `adb connect` đăng ký
+    với adb server, nên lệnh sau đó không tìm thấy thiết bị. Dùng serial gốc cho
+    `adb -s <serial>` là cách duy nhất chắc chắn đúng.
     """
-    import re
     import subprocess
 
     try:
@@ -73,9 +81,11 @@ def scan_adb_devices(adb_binary: str, host: str = "127.0.0.1") -> int | None:
         )
     except Exception:
         return None
-    pattern = re.compile(rf"^{re.escape(host)}:(\d+)\s+device\b", re.MULTILINE)
-    m = pattern.search(proc.stdout)
-    return int(m.group(1)) if m else None
+    for line in proc.stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[1] == "device":
+            return parts[0]
+    return None
 
 
 class AdbScreen:
@@ -94,6 +104,7 @@ class AdbScreen:
         window_title: str = "BlueStacks",
         device=None,
         adb_binary: str | None = None,
+        serial: str | None = None,
     ):
         self.template_width = template_width
         self.host = host
@@ -101,8 +112,15 @@ class AdbScreen:
         self.window_title = window_title
         self._dev = device
         self.adb_binary = adb_binary
+        self.serial = serial
         self.raw_size: tuple[int, int] | None = None  # (w, h) của màn Android
         self._warned_titlebar = False
+
+    @property
+    def target(self) -> str:
+        """Chuỗi truyền cho `adb -s` — ưu tiên serial dò được (đúng mọi định dạng),
+        không thì ráp host:port (cấu hình tay/cố định)."""
+        return self.serial or f"{self.host}:{self.port}"
 
     # ---------- kết nối ----------
 
@@ -158,7 +176,7 @@ class AdbScreen:
 
         try:
             proc = subprocess.run(
-                [self.adb_binary, "-s", f"{self.host}:{self.port}", "exec-out", "screencap", "-p"],
+                [self.adb_binary, "-s", self.target, "exec-out", "screencap", "-p"],
                 capture_output=True,
                 timeout=25,
                 check=True,

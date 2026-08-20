@@ -32,27 +32,39 @@ def make_screen(cfg: Config):
     from dwauto.window import find_window
 
     port = cfg.adb_port
+    serial = None
     if port == 0:
-        # MuMu Player dùng cổng ngẫu nhiên (không nằm trong COMMON_PORTS cố định
-        # của BlueStacks/LDPlayer/Nox/MEmu) — ưu tiên dò qua `adb devices` thật
-        # khi có adb_binary, đáng tin cậy hơn scan cổng TCP mù (không phân biệt
-        # được cổng "device" thật với cổng control nội bộ đang "offline").
+        # MuMu Player dùng cổng/serial đổi mỗi lần bật lại ADB hoặc đổi cấu hình
+        # instance (RAM/CPU) — không nằm trong COMMON_PORTS cố định của
+        # BlueStacks/LDPlayer/Nox/MEmu, và có lúc đăng ký kiểu "emulator-XXXX"
+        # thay vì "host:port" (gặp thật 16/08/2026). Ưu tiên đọc thẳng serial từ
+        # `adb devices`, đáng tin cậy hơn scan cổng TCP mù (không phân biệt được
+        # cổng "device" thật với cổng control nội bộ đang "offline", và không tự
+        # đăng ký với adb server nên dùng ngay sẽ báo device not found).
         if cfg.adb_binary:
-            port = scan_adb_devices(cfg.adb_binary, cfg.adb_host)
-        if port is None:
+            serial = scan_adb_devices(cfg.adb_binary)
+        if serial is None:
             port = scan_ports(cfg.adb_host)
-        if port is None:
+            if port is not None and cfg.adb_binary:
+                import subprocess
+
+                subprocess.run(
+                    [cfg.adb_binary, "connect", f"{cfg.adb_host}:{port}"],
+                    capture_output=True, timeout=10,
+                )
+        if serial is None and port is None:
             raise RuntimeError(
                 "No open ADB port found. Start the emulator, and enable ADB under "
                 "Settings > Advanced if you are on BlueStacks for Windows, or "
                 "Developer > Open ADB if you are on MuMu Player."
             )
-        logging.info("Found ADB port: %d", port)
+        logging.info("Found ADB device: %s", serial or f"{cfg.adb_host}:{port}")
 
     scr = AdbScreen(
         template_width=cfg.template_width,
         host=cfg.adb_host,
-        port=port,
+        port=port or cfg.adb_port,
+        serial=serial,
         window_title=cfg.window_title,
         adb_binary=cfg.adb_binary,
     )
@@ -65,8 +77,8 @@ def make_screen(cfg: Config):
         # chụp và tap được bình thường qua ADB, chỉ mất thông tin log ở đây.
         where = f"window '{cfg.window_title}' not found (minimized/hidden — fine for click.backend=adb)"
     logging.info(
-        "Capture source: ADB %s:%d - Android screen %dx%d, %s",
-        cfg.adb_host, port, raw.shape[1], raw.shape[0], where,
+        "Capture source: ADB %s - Android screen %dx%d, %s",
+        scr.target, raw.shape[1], raw.shape[0], where,
     )
     return scr
 
@@ -208,7 +220,8 @@ def main(argv: list[str] | None = None) -> int:
         mouse = AdbMouse(
             adb_binary=cfg.adb_binary,
             host=cfg.adb_host,
-            port=screen.port if hasattr(screen, "port") else cfg.adb_port,
+            port=getattr(screen, "port", cfg.adb_port),
+            serial=getattr(screen, "serial", None),
             offset_px=cfg.offset_px,
             delay=cfg.click_delay,
             dry_run=args.dry_run,
