@@ -68,9 +68,10 @@ class QueueLogHandler(logging.Handler):
 class RallyWorker(threading.Thread):
     """Runs the rally loop off the UI thread so the window stays responsive."""
 
-    def __init__(self, minutes: float, on_finish):
+    def __init__(self, minutes: float, teams: int, on_finish):
         super().__init__(daemon=True)
         self.minutes = minutes
+        self.teams = teams
         self.on_finish = on_finish
         self.stop_event = threading.Event()
         self.error: str | None = None
@@ -88,7 +89,7 @@ class RallyWorker(threading.Thread):
             from main import make_screen
 
             cfg = load_config(resource_dir() / "config.yaml")
-            cfg = dataclasses.replace(cfg, wait_minutes=self.minutes)
+            cfg = dataclasses.replace(cfg, wait_minutes=self.minutes, marches_per_round=self.teams)
 
             screen = make_screen(cfg)
             if cfg.click_backend == "adb":
@@ -166,6 +167,19 @@ class App(tk.Tk):
         self.minutes_entry.pack(side="left", padx=6)
         ttk.Label(row, text="minutes").pack(side="left")
 
+        # Số đội quân march liên tiếp mỗi vòng — game cho phép rally bằng 3 hoặc
+        # 4 team tuỳ cấu hình liên minh, khác nhau tuỳ người chơi/thời điểm.
+        teams_row = ttk.Frame(root)
+        teams_row.pack(pady=(6, 0))
+        ttk.Label(teams_row, text="Teams").pack(side="left")
+        self.teams_var = tk.IntVar(value=3)
+        self.teams_radios = [
+            ttk.Radiobutton(teams_row, text="3 team", variable=self.teams_var, value=3),
+            ttk.Radiobutton(teams_row, text="4 team", variable=self.teams_var, value=4),
+        ]
+        for radio in self.teams_radios:
+            radio.pack(side="left", padx=6)
+
         self.toggle = ttk.Button(root, text="Start", command=self._toggle, width=14)
         self.toggle.pack(pady=(8, 4))
 
@@ -239,10 +253,14 @@ class App(tk.Tk):
                 error=True,
             )
             return
-        self.worker = RallyWorker(minutes, on_finish=lambda: self.after(0, self._on_worker_done))
+        self.worker = RallyWorker(
+            minutes, self.teams_var.get(), on_finish=lambda: self.after(0, self._on_worker_done)
+        )
         self.worker.start()
         self.toggle.config(text="Stop")
         self.minutes_entry.config(state="disabled")
+        for radio in self.teams_radios:
+            radio.config(state="disabled")
         self._set_status(
             "Running." if not needs_accessibility else "Running — keep the emulator window visible."
         )
@@ -252,6 +270,8 @@ class App(tk.Tk):
         self.worker = None
         self.toggle.config(text="Start", state="normal")
         self.minutes_entry.config(state="normal")
+        for radio in self.teams_radios:
+            radio.config(state="normal")
         self._set_status(error or "Idle", error=bool(error))
 
     def _on_close(self) -> None:
