@@ -73,6 +73,16 @@ class RallyRunner:
     def _find(self, name: str):
         return self.screen.find(self._tpl(name), threshold=self.cfg.threshold_for(name))
 
+    def _has_template(self, name: str) -> bool:
+        return name in self.cfg.templates
+
+    def _click_match(self, match, label: str) -> None:
+        if getattr(self.mouse, "uses_device_coords", False):
+            mx, my = self.screen.to_device(match.x, match.y)
+        else:
+            mx, my = self.screen.to_mouse(match.x, match.y)
+        self.mouse.click(mx, my, label=label)
+
     def _wait_gone(self, name: str) -> bool:
         """Chờ tới khi nút biến mất — dùng cho bước cuối, xem như click đã ăn."""
         deadline = time.monotonic() + self.cfg.step_timeout
@@ -106,11 +116,7 @@ class RallyRunner:
             return False
 
         for attempt in range(self.cfg.retries + 1):
-            if getattr(self.mouse, "uses_device_coords", False):
-                mx, my = self.screen.to_device(match.x, match.y)
-            else:
-                mx, my = self.screen.to_mouse(match.x, match.y)
-            self.mouse.click(mx, my, label=f"{step.name}/{step.template}")
+            self._click_match(match, label=f"{step.name}/{step.template}")
 
             if self._reached(step):
                 return True
@@ -133,6 +139,38 @@ class RallyRunner:
         log.error("[%s] failed after %d clicks", step.name, self.cfg.retries + 1)
         return False
 
+    # ---------- hết energy ----------
+
+    def _refill_energy_if_needed(self) -> None:
+        """Hết energy thì nút March đổi thành Get Energy — cùng vị trí/kích thước,
+        chỉ khác chữ. Tự bấm Get Energy → x20 (dùng luôn item "10 Energy" có sẵn
+        trong túi, game tự áp dụng + đóng popup, không cần bấm Use riêng) → chờ
+        quay lại panel March, rồi để do_step(march) làm tiếp như bình thường.
+
+        Không cấu hình 2 template này, còn đủ energy (còn thấy march_button), hoặc
+        không tìm thấy Get Energy (hết vì lý do khác) thì bỏ qua im lặng — do_step
+        tự báo lỗi theo đường cũ. Hết sạch item "10 Energy" (không thấy nút x20)
+        cũng bỏ qua — không có gì bù thêm được, march sẽ báo lỗi bình thường.
+        """
+        if not self._has_template("get_energy_button") or not self._has_template("energy_x20_button"):
+            return
+        if self._find("march_button") is not None:
+            return
+        energy_btn = self._find("get_energy_button")
+        if energy_btn is None:
+            return
+
+        log.info("[energy] Hết energy - bấm Get Energy")
+        self._click_match(energy_btn, label="energy/get_energy_button")
+
+        x20 = self._wait("energy_x20_button")
+        if x20 is None:
+            log.warning("[energy] Không thấy nút x20 (có thể hết item nạp energy) - bỏ qua")
+            return
+        log.info("[energy] Bấm x20 để dùng item nạp energy")
+        self._click_match(x20, label="energy/energy_x20_button")
+        self._wait("march_button")  # chờ quay lại panel March trước khi march tiếp
+
     # ---------- một lượt march ----------
 
     def march_once(self) -> bool:
@@ -141,6 +179,8 @@ class RallyRunner:
         for step in STEPS:
             if self.should_stop():
                 return False
+            if step.name == "march":
+                self._refill_energy_if_needed()
             if not self.do_step(step):
                 self.marches_failed += 1
                 return False

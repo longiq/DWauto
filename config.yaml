@@ -31,6 +31,10 @@ templates:
   search_confirm: templates/search_confirm.png  # nút Search trong panel Rally
   rally_button: templates/rally_button.png      # nút Rally tròn trên popup mục tiêu
   march_button: templates/march_button.png      # nút March
+  # Hết energy: nút March đổi thành Get Energy (cùng vị trí). Bấm vào mở popup
+  # "Get More", nút x20 dùng luôn item "10 Energy" có sẵn, tự đóng popup lại.
+  get_energy_button: templates/get_energy_button.png
+  energy_x20_button: templates/energy_x20_button.png
 
 rally:
   marches_per_round: 3     # 3 lượt liên tiếp cho 3 đội quân
