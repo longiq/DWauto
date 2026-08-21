@@ -16,18 +16,29 @@ from dwauto.screen import Match
 # Toạ độ nút lấy từ bản ghi thật (recordings_mac), theo pixel ảnh chụp.
 BUTTONS = {
     "search_button": (31, 767),
+    "rally_tab_button": (400, 400),
     "search_confirm": (458, 868),
     "rally_button": (258, 561),
     "march_button": (294, 708),
 }
 # Màn hình nào hiện nút nào + click vào đó thì chuyển sang màn hình nào.
+# "panel_pretab" mô phỏng panel Search vừa mở, chưa chắc đúng tab Rally — game
+# thật hiện rally_tab_button và search_confirm CÙNG LÚC (update 21/08/2026),
+# đơn giản hoá thành 2 state nối tiếp vẫn đủ để test đúng thứ tự + số bước.
 VISIBLE = {
     "world_map": "search_button",
+    "panel_pretab": "rally_tab_button",
     "panel": "search_confirm",
     "target": "rally_button",
     "march": "march_button",
 }
-NEXT = {"world_map": "panel", "panel": "target", "target": "march", "march": "world_map"}
+NEXT = {
+    "world_map": "panel_pretab",
+    "panel_pretab": "panel",
+    "panel": "target",
+    "target": "march",
+    "march": "world_map",
+}
 
 
 class FakeGame:
@@ -98,11 +109,11 @@ def runner(game: FakeGame, cfg: Config | None = None, should_stop=None) -> Rally
 # ---------- luồng bình thường ----------
 
 
-def test_mot_luot_march_du_4_click():
+def test_mot_luot_march_du_5_click():
     game = FakeGame()
     r = runner(game)
     assert r.march_once() is True
-    assert len(game.clicks) == 4
+    assert len(game.clicks) == 5
     assert game.state == "world_map"  # quay lại map, sẵn sàng lượt kế
     assert (r.marches_done, r.marches_failed) == (1, 0)
 
@@ -116,18 +127,20 @@ def test_click_dung_toa_do_chuot_khong_phai_pixel_anh():
 
 def test_thu_tu_buoc_dung_spec():
     assert [s.template for s in STEPS] == [
-        "search_button", "search_confirm", "rally_button", "march_button",
+        "search_button", "rally_tab_button", "search_confirm", "rally_button", "march_button",
     ]
     # Bước cuối expect=None: xác nhận bằng việc nút March biến mất, vì world map
     # chưa hiện ngay sau khi bấm (game chạy animation bay tới điểm tập kết).
-    assert [s.expect for s in STEPS] == ["search_confirm", "rally_button", "march_button", None]
+    assert [s.expect for s in STEPS] == [
+        "rally_tab_button", "search_confirm", "rally_button", "march_button", None,
+    ]
 
 
 def test_ba_luot_moi_vong():
     game = FakeGame()
     r = runner(game)
     assert r.run_round() == 3
-    assert len(game.clicks) == 12
+    assert len(game.clicks) == 15
     assert r.marches_done == 3
 
 
@@ -139,7 +152,7 @@ def test_click_dau_bi_nuot_van_march_duoc():
     game = FakeGame(eat_clicks=1)
     r = runner(game)
     assert r.march_once() is True
-    assert len(game.clicks) == 5  # 4 click thật + 1 click bị nuốt phải bấm lại
+    assert len(game.clicks) == 6  # 5 click thật + 1 click bị nuốt phải bấm lại
     assert game.clicks[0] == game.clicks[1]  # click lại đúng chỗ cũ
 
 
@@ -149,8 +162,8 @@ def test_nut_khong_an_thi_bo_luot_sau_khi_thu_du_so_lan():
     r = runner(game, cfg)
     assert r.march_once() is False
     assert r.marches_failed == 1
-    # search + confirm = 2 click, rồi rally bấm 1 + 2 lần thử lại = 3
-    assert len(game.clicks) == 5
+    # search + rally_tab + confirm = 3 click, rồi rally bấm 1 + 2 lần thử lại = 3
+    assert len(game.clicks) == 6
 
 
 def test_khong_thay_nut_thi_khong_click_bua():
@@ -196,7 +209,7 @@ def test_should_stop_chan_luot_ke():
     assert r.march_once() is True
     stop["v"] = True
     assert r.march_once() is False
-    assert len(game.clicks) == 4  # không click thêm sau khi bị yêu cầu dừng
+    assert len(game.clicks) == 5  # không click thêm sau khi bị yêu cầu dừng
 
 
 def test_sleep_ngat_duoc_khong_cho_het_gio():
@@ -283,7 +296,7 @@ def test_march_tinh_la_xong_khi_panel_dong_du_map_chua_hien():
     r = runner(game, make_cfg(step_timeout=0.3, poll_interval=0.01))
     assert r.march_once() is True
     assert (r.marches_done, r.marches_failed) == (1, 0)
-    assert len(game.clicks) == 4  # không click lại thừa
+    assert len(game.clicks) == 5  # không click lại thừa
 
 
 def test_march_van_hong_neu_panel_khong_dong():

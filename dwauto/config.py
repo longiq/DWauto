@@ -11,7 +11,9 @@ from pathlib import Path
 
 import yaml
 
-REQUIRED_TEMPLATES = ("search_button", "search_confirm", "rally_button", "march_button")
+REQUIRED_TEMPLATES = (
+    "search_button", "rally_tab_button", "search_confirm", "rally_button", "march_button",
+)
 
 
 class ConfigError(Exception):

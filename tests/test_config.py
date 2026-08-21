@@ -16,6 +16,7 @@ BASE = {
     "match": {"threshold": 0.85},
     "templates": {
         "search_button": "a.png",
+        "rally_tab_button": "e.png",
         "search_confirm": "b.png",
         "rally_button": "c.png",
         "march_button": "d.png",

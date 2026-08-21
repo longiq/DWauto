@@ -25,16 +25,28 @@ match:
     # Kính lúp vẽ đè thẳng lên bản đồ, không có nền riêng: chat trong game chạy
     # qua phía sau làm điểm rớt còn ~0.86. Đo được: có nút 0.86-1.00, không có 0.53.
     search_button: 0.75
+    # Nút Rally có hiệu ứng xoay liên tục quanh icon — mỗi lần chụp bắt 1 khung
+    # animation khác nhau. Đo được thật 21/08/2026: dao động 0.81-0.98 tại đúng
+    # nút, ngưỡng mặc định 0.85 thỉnh thoảng cao hơn điểm đo được → đây là
+    # nguyên nhân thật của "kẹt ở rally" người dùng báo, không chỉ do rally đầy
+    # quân. Hạ ngưỡng xuống dưới đáy dao động đã đo, còn dư biên an toàn.
+    rally_button: 0.7
 
 templates:
   search_button: templates/search_button.png    # kính lúp trên world map
   search_confirm: templates/search_confirm.png  # nút Search trong panel Rally
+  # Update 21/08/2026: panel Search giờ có 3 tab Jungle/Gather/Rally, phải tự
+  # chọn tab Rally (có lúc không mặc định) trước khi bấm Search.
+  rally_tab_button: templates/rally_tab_button.png
   rally_button: templates/rally_button.png      # nút Rally tròn trên popup mục tiêu
   march_button: templates/march_button.png      # nút March
   # Hết energy: nút March đổi thành Get Energy (cùng vị trí). Bấm vào mở popup
   # "Get More", nút x20 dùng luôn item "10 Energy" có sẵn, tự đóng popup lại.
   get_energy_button: templates/get_energy_button.png
   energy_x20_button: templates/energy_x20_button.png
+  # Rally đã đầy quân (troop tổng của rally vượt giới hạn): March cùng vị trí
+  # nhưng hiện màu xám, khoá hẳn — không có gì bù, chỉ bấm Back thoát rally này.
+  march_button_disabled: templates/march_button_disabled.png
 
 rally:
   marches_per_round: 3     # 3 lượt liên tiếp cho 3 đội quân

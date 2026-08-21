@@ -27,7 +27,14 @@ class Step(NamedTuple):
 
 
 STEPS = (
-    Step("search", "search_button", "search_confirm"),
+    # Cập nhật 21/08/2026 (game update, đổi layout panel Search): giờ có 3 tab
+    # Jungle | Gather | Rally, cả rally_tab_button lẫn search_confirm hiện đồng
+    # thời ngay khi panel mở (bất kể tab nào đang chọn) — dùng rally_tab_button
+    # làm dấu hiệu "đã mở đúng panel" cho bước search, RỒI mới bấm nó (đúng tab
+    # hay chưa cũng không sao, bấm lại tab đang chọn không đổi gì) để chắc chắn
+    # tìm đúng loại mục tiêu trước khi tin search_confirm sẽ search đúng Rally.
+    Step("search", "search_button", "rally_tab_button"),
+    Step("rally_tab", "rally_tab_button", "search_confirm"),
     Step("confirm", "search_confirm", "rally_button"),
     Step("rally", "rally_button", "march_button"),
     # Bấm March xong game chạy animation bay tới điểm tập kết, world map chưa hiện
@@ -96,7 +103,17 @@ class RallyRunner:
     def _reached(self, step: Step) -> bool:
         if step.expect is None:
             return self._wait_gone(step.template)
-        return self._wait(step.expect) is not None
+        if self._wait(step.expect) is not None:
+            return True
+        # Bước "rally" chờ march_button hiện ra sau khi bấm Rally — nhưng rally
+        # đã đầy quân (troop tổng của rally vượt giới hạn) thì March hiện ra bị
+        # khoá (xám) thay vì bấm được, cùng vị trí/kích thước nhưng khác template.
+        # Vẫn coi là "đã tới nơi" để bước march sau xử lý bỏ qua có kiểm soát
+        # (_skip_if_march_locked) — không có nhánh này thì do_step("rally") coi
+        # là thất bại luôn, không bao giờ chạy tới bước "march" để nhận biết.
+        if step.expect == "march_button" and self._has_template("march_button_disabled"):
+            return self._find("march_button_disabled") is not None
+        return False
 
     def sleep(self, seconds: float) -> bool:
         """Nghỉ nhưng vẫn phản hồi lệnh dừng. Trả False nếu bị yêu cầu dừng."""
@@ -171,6 +188,52 @@ class RallyRunner:
         self._click_match(x20, label="energy/energy_x20_button")
         self._wait("march_button")  # chờ quay lại panel March trước khi march tiếp
 
+    # ---------- rally đã đầy quân ----------
+
+    # Toạ độ Android thật, ngoài khung panel March/target (khung chiếm khoảng
+    # x:227-903, y:435-1270) — rơi vào vùng biển trống bên phải world map.
+    # Verify bằng tay 20/08/2026: tap đây đóng popup, không mở thêm gì khác.
+    _DISMISS_TAP = (800, 950)
+
+    def _dismiss_popup(self) -> bool:
+        """Tap ra ngoài popup để đóng nó — panel March không có nút X, và
+        KEYCODE_BACK Android **KHÔNG AN TOÀN**: verify bằng tay 20/08/2026, Back
+        bị game hiểu là thoát app, bật hộp thoại "Quit the game?" — nếu vô tình
+        chạy tiếp mà không xử lý, có nguy cơ auto-thoát cả game. Tuyệt đối không
+        dùng adb input keyevent KEYCODE_BACK ở đây hay bất cứ đâu trong rally.py.
+
+        Chỉ làm được khi dùng AdbMouse (có sẵn adb_binary + target ADB thật) —
+        backend Mouse (chuột thật) không dùng tính năng này, bỏ qua."""
+        if not getattr(self.mouse, "uses_device_coords", False):
+            return False
+        x, y = self._DISMISS_TAP
+        self.mouse.click(x, y, label="march/dismiss_popup")
+        return True
+
+    def _skip_if_march_locked(self) -> bool:
+        """Rally đã đầy quân (tổng troop CỦA RALLY vượt giới hạn — không phải của
+        mình) thì March bị khoá: hiện đúng vị trí/kích thước march_button nhưng
+        màu xám, không có cách nào march được (không giống hết energy, không có
+        gì bù). Trước đây tool cứ chờ đủ step_timeout rồi mới báo lỗi, verify thật
+        20/08/2026: kẹt hẳn ở panel này rất lâu vì recover() sau đó cũng không
+        thấy world map (còn đang ở panel March, chưa thoát) — đúng bug người dùng
+        báo "kẹt tại nút rally, tưởng là click nhầm chỗ".
+
+        Tap ra ngoài popup để đóng ngay thay vì chờ vô ích, coi lượt này là bỏ qua
+        có kiểm soát. Không cấu hình template này thì bỏ qua, để hành vi cũ (chờ
+        rồi báo lỗi qua do_step) vẫn chạy như trước.
+        """
+        if not self._has_template("march_button_disabled"):
+            return False
+        if self._find("march_button") is not None:
+            return False
+        if self._find("march_button_disabled") is None:
+            return False
+        log.info("[march] Rally đã đầy quân (troop vượt giới hạn) - bỏ qua, thoát về world map")
+        if self._dismiss_popup():
+            self._wait("search_button", timeout=self.cfg.step_timeout)
+        return True
+
     # ---------- một lượt march ----------
 
     def march_once(self) -> bool:
@@ -181,6 +244,9 @@ class RallyRunner:
                 return False
             if step.name == "march":
                 self._refill_energy_if_needed()
+                if self._skip_if_march_locked():
+                    self.marches_failed += 1
+                    return False
             if not self.do_step(step):
                 self.marches_failed += 1
                 return False
