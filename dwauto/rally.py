@@ -105,14 +105,19 @@ class RallyRunner:
             return self._wait_gone(step.template)
         if self._wait(step.expect) is not None:
             return True
-        # Bước "rally" chờ march_button hiện ra sau khi bấm Rally — nhưng rally
-        # đã đầy quân (troop tổng của rally vượt giới hạn) thì March hiện ra bị
-        # khoá (xám) thay vì bấm được, cùng vị trí/kích thước nhưng khác template.
-        # Vẫn coi là "đã tới nơi" để bước march sau xử lý bỏ qua có kiểm soát
-        # (_skip_if_march_locked) — không có nhánh này thì do_step("rally") coi
-        # là thất bại luôn, không bao giờ chạy tới bước "march" để nhận biết.
-        if step.expect == "march_button" and self._has_template("march_button_disabled"):
-            return self._find("march_button_disabled") is not None
+        # Bước "rally" chờ march_button hiện ra sau khi bấm Rally — nhưng đôi khi
+        # panel March mở ra ở MỘT BIẾN THỂ KHÁC, cùng vị trí/kích thước nhưng khác
+        # template: rally đã đầy quân (March hiện xám, khoá) hoặc hết energy (nút
+        # đổi thành Get Energy). Vẫn coi là "đã tới nơi" để bước march sau xử lý
+        # tiếp (_skip_if_march_locked hoặc _refill_energy_if_needed) — không có
+        # nhánh này thì do_step("rally") coi là thất bại luôn, không bao giờ chạy
+        # tới bước "march" để nhận biết và xử lý đúng biến thể.
+        # Bug thật đã gặp 22/08/2026: chỉ xử lý march_button_disabled, quên
+        # get_energy_button — hết energy vẫn kẹt y hệt trước khi có fix này.
+        if step.expect == "march_button":
+            for variant in ("march_button_disabled", "get_energy_button"):
+                if self._has_template(variant) and self._find(variant) is not None:
+                    return True
         return False
 
     def sleep(self, seconds: float) -> bool:
