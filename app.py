@@ -11,6 +11,7 @@ import logging
 import queue
 import sys
 import threading
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk
@@ -75,6 +76,7 @@ class RallyWorker(threading.Thread):
         self.on_finish = on_finish
         self.stop_event = threading.Event()
         self.error: str | None = None
+        self.runner = None  # gán sau khi tạo — App đọc runner.wait_until để đếm ngược
 
     def stop(self) -> None:
         self.stop_event.set()
@@ -120,6 +122,7 @@ class RallyWorker(threading.Thread):
                 should_stop=self.stop_event.is_set,
                 focus=focus,
             )
+            self.runner = runner
             log.info(
                 "Started — %d marches per cycle, %g minute wait between cycles.",
                 cfg.marches_per_round, self.minutes,
@@ -152,6 +155,7 @@ class App(tk.Tk):
         self._install_logging()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(150, self._drain_log)
+        self.after(1000, self._tick_countdown)
 
     # ---------- layout ----------
 
@@ -296,6 +300,20 @@ class App(tk.Tk):
         if last is not None and self.worker is not None:
             level, text = last
             self._set_status(text, error=level >= logging.WARNING)
+
+    def _tick_countdown(self) -> None:
+        """Đếm ngược giữa 2 vòng rally — trước đây đứng yên 1 dòng "Waiting N
+        minutes" tới khi vòng kế bắt đầu. Đọc runner.wait_until (đặt trong
+        run_forever, xem dwauto/rally.py) mỗi giây, không xung đột với
+        _drain_log(): trong lúc đang chờ không có log nào khác được ghi, nên
+        đây là nguồn cập nhật status duy nhất ở giai đoạn này."""
+        runner = getattr(self.worker, "runner", None) if self.worker is not None else None
+        wait_until = getattr(runner, "wait_until", None)
+        if wait_until is not None:
+            remaining = max(0.0, wait_until - time.monotonic())
+            mins, secs = divmod(int(remaining + 0.999), 60)
+            self._set_status(f"Waiting {mins}m {secs:02d}s before the next cycle…")
+        self.after(1000, self._tick_countdown)
         self.after(300, self._drain_log)
 
 

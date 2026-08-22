@@ -61,6 +61,10 @@ class RallyRunner:
         self.cfg = cfg
         self.should_stop = should_stop or (lambda: False)
         self.focus = focus or (lambda: True)
+        # Mốc thời gian (time.monotonic) sẽ hết chờ giữa 2 vòng rally — None khi
+        # không đang chờ (đang march hoặc chưa bắt đầu). App GUI đọc giá trị này
+        # mỗi giây để hiện đếm ngược thay vì 1 dòng "Waiting N minutes" đứng yên.
+        self.wait_until: float | None = None
         self.marches_done = 0
         self.marches_failed = 0
 
@@ -195,25 +199,39 @@ class RallyRunner:
 
     # ---------- rally đã đầy quân ----------
 
-    # Toạ độ Android thật, ngoài khung panel March/target (khung chiếm khoảng
-    # x:227-903, y:435-1270) — rơi vào vùng biển trống bên phải world map.
-    # Verify bằng tay 20/08/2026: tap đây đóng popup, không mở thêm gì khác.
-    _DISMISS_TAP = (800, 950)
+    # Toạ độ Android thật để tap ra ngoài popup — LUÂN PHIÊN 2 điểm vì 2 dạng
+    # panel có bố cục khác hẳn nhau, mỗi điểm chỉ "thấy" world map với đúng 1
+    # dạng: panel March là card hẹp (world map lộ 2 bên) → điểm phía TRÊN cụm 4
+    # avatar march góc phải; panel Search là bottom-sheet trải hết chiều ngang
+    # (world map chỉ lộ phía TRÊN panel) → điểm giữa HUD trên và panel. Verify
+    # tay 22/08/2026: dùng 1 điểm cho cả 2 dạng thất bại — tap đúng vào khoảng
+    # trống BÊN TRONG panel Search, không có tác dụng dismiss gì cả.
+    _DISMISS_TAPS = ((840, 620), (840, 800))
 
-    def _dismiss_popup(self) -> bool:
+    def _dismiss_popup(self, times: int = 3) -> bool:
         """Tap ra ngoài popup để đóng nó — panel March không có nút X, và
         KEYCODE_BACK Android **KHÔNG AN TOÀN**: verify bằng tay 20/08/2026, Back
         bị game hiểu là thoát app, bật hộp thoại "Quit the game?" — nếu vô tình
         chạy tiếp mà không xử lý, có nguy cơ auto-thoát cả game. Tuyệt đối không
         dùng adb input keyevent KEYCODE_BACK ở đây hay bất cứ đâu trong rally.py.
 
+        Verify tay 22/08/2026: đôi khi popup lồng nhiều lớp (March → panel Search
+        → world map, khi server tự ghép rally bỏ qua bước target riêng) — 1 lần
+        tap chỉ đóng lớp trên cùng, phải tap nhiều lần (luân phiên đúng điểm cho
+        từng dạng panel — xem _DISMISS_TAPS) mới chắc chắn về world map, dừng
+        sớm ngay khi đã thấy search_button.
+
         Chỉ làm được khi dùng AdbMouse (có sẵn adb_binary + target ADB thật) —
         backend Mouse (chuột thật) không dùng tính năng này, bỏ qua."""
         if not getattr(self.mouse, "uses_device_coords", False):
             return False
-        x, y = self._DISMISS_TAP
-        self.mouse.click(x, y, label="march/dismiss_popup")
-        return True
+        for i in range(times):
+            if self._find("search_button") is not None:
+                return True
+            x, y = self._DISMISS_TAPS[i % len(self._DISMISS_TAPS)]
+            self.mouse.click(x, y, label="march/dismiss_popup")
+            time.sleep(self.cfg.poll_interval)
+        return self._find("search_button") is not None
 
     def _skip_if_march_locked(self) -> bool:
         """Rally đã đầy quân (tổng troop CỦA RALLY vượt giới hạn — không phải của
@@ -254,6 +272,14 @@ class RallyRunner:
                     return False
             if not self.do_step(step):
                 self.marches_failed += 1
+                if step.name == "march":
+                    # Panel March không đóng dù đã bấm đủ số lần thử, và không
+                    # khớp biến thể nào đã biết (khoá do đầy quân, hết energy) —
+                    # ví dụ quân "không khả thi" để march (đủ 4 slot march đồng
+                    # thời cùng lúc). Không có template riêng để nhận diện lý do,
+                    # nhưng vẫn cần thoát khỏi panel treo — không thì lượt search
+                    # kế tiếp cũng fail vì chưa phải world map, kẹt tiếp mãi.
+                    self._dismiss_popup()
                 return False
         self.marches_done += 1
         log.info("March done (%d succeeded / %d failed)", self.marches_done, self.marches_failed)
@@ -300,5 +326,8 @@ class RallyRunner:
                 "Cycle done: %d/%d marches. Waiting %g minutes.",
                 ok, self.cfg.marches_per_round, self.cfg.wait_minutes,
             )
-            if not self.sleep(self.cfg.wait_seconds):
+            self.wait_until = time.monotonic() + self.cfg.wait_seconds
+            stopped_early = not self.sleep(self.cfg.wait_seconds)
+            self.wait_until = None
+            if stopped_early:
                 break
