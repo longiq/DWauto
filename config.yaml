@@ -1,5 +1,9 @@
-# Sinh từ recordings_mac/ (macOS + BlueStacks Air, 04/08/2026).
-# Đổi máy / đổi kích thước cửa sổ giả lập → phải ghi lại template.
+# Cập nhật 26/08/2026: chuyển từ MuMu Player sang BlueStacks Air 5.21.785 —
+# verify lại thấy input tap KHÔNG còn bị khoá như bản 5.21.770 cũ (SPEC.md có
+# ghi chi tiết). BlueStacks miễn phí thật, không cần đăng nhập, cổng ADB cố định
+# (khác MuMu đổi cổng liên tục). Toàn bộ template cũ dùng lại được nguyên vẹn —
+# cùng game, cùng UI asset, cùng tỉ lệ khung hình (0.5625), chỉ khác độ phân giải
+# tuyệt đối (1080x1920 so với 900x1600) — verify khớp 0.90-0.98 không cần cắt lại.
 
 capture:
   # adb    = chụp thẳng từ Android. Cửa sổ để ĐÂU, TO NHỎ ra sao cũng chạy, và
@@ -7,14 +11,16 @@ capture:
   # screen = chụp màn hình máy, phải khai báo region cố định bên dưới.
   backend: adb
 
-  window_title: Android Device   # dò cửa sổ theo tên, để quy đổi toạ độ lúc click
+  window_title: BlueStacks   # dò cửa sổ theo tên, để quy đổi toạ độ lúc click
   template_width: 506        # bề ngang ảnh lúc cắt template — ĐỪNG đổi nếu không cắt lại
   adb_host: 127.0.0.1
-  adb_port: 0                # 0 = tự dò qua `adb devices` — MuMu đổi cổng ngẫu nhiên
-                              # mỗi lần Open ADB lại nên không đặt cứng số nữa
-  # adb_shell (thư viện Python thuần) treo tới timeout khi chụp qua MuMu — dùng
-  # thẳng adb binary thật qua subprocess thay thế. Bỏ trống nếu quay lại BlueStacks.
-  adb_binary: "/Applications/MuMuPlayer Pro.app/Contents/MacOS/MuMu Android Device.app/Contents/MacOS/tools/adb"
+  adb_port: 5555              # BlueStacks dùng cổng cố định (Settings > Advanced > ADB),
+                               # không đổi ngẫu nhiên như MuMu — đặt cứng vẫn ổn định
+  # BlueStacks không bundle sẵn adb riêng — dùng bản chuẩn cài qua Homebrew
+  # (`brew install android-platform-tools`). Không cần trick "gọi qua adb_binary
+  # thay adb_shell" như MuMu nữa — BlueStacks không có bug đó, nhưng vẫn giữ
+  # đường này vì subprocess đáng tin cậy hơn thư viện adb_shell nói chung.
+  adb_binary: "/opt/homebrew/bin/adb"
 
   # Chỉ dùng khi backend=screen. Đo lại bằng: python recorder.py --pick-region
   region: [149, 84, 506, 932]
