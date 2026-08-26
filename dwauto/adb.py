@@ -58,6 +58,27 @@ def scan_ports(host: str = "127.0.0.1", ports=COMMON_PORTS) -> int | None:
     return None
 
 
+def ensure_connected(adb_binary: str, host: str, port: int, timeout: float = 10.0) -> bool:
+    """Chủ động `adb connect host:port` trước khi dùng — đây mới là gốc rễ của bug
+    "screencap failed" gặp thật 26/08/2026 trên BlueStacks (cổng CỐ ĐỊNH 5555,
+    không đổi như MuMu), không phải do thiếu cơ chế dò cổng: mỗi lần tắt/bật lại
+    emulator, kết nối cũ biến mất khỏi danh sách của adb server trên máy — dò
+    cổng (scan_adb_devices) chỉ ĐỌC danh sách "đã kết nối" đó, không tự tạo kết
+    nối mới, nên dò cổng đúng cách mấy cũng vô ích nếu chưa từng connect. Idempotent
+    — gọi lại khi đã kết nối rồi không sao ("already connected").
+    """
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            [adb_binary, "connect", f"{host}:{port}"],
+            capture_output=True, timeout=timeout, text=True,
+        )
+    except Exception:
+        return False
+    return "connected" in proc.stdout.lower() or "already" in proc.stdout.lower()
+
+
 def scan_adb_devices(adb_binary: str) -> str | None:
     """Dò SERIAL thiết bị đang ở trạng thái "device" (đã bắt tay xong) qua
     `adb devices` thật — bỏ qua "offline" (cổng control nội bộ của MuMu, không

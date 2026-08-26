@@ -28,37 +28,50 @@ def make_screen(cfg: Config):
         logging.info("Capture source: screen grab, fixed region %s", cfg.region)
         return Screen(area=dict(cfg.region))
 
-    from dwauto.adb import AdbScreen, scan_adb_devices, scan_ports
+    from dwauto.adb import AdbScreen, COMMON_PORTS, ensure_connected, scan_adb_devices, scan_ports
     from dwauto.window import find_window
 
     port = cfg.adb_port
     serial = None
-    if port == 0:
-        # MuMu Player dùng cổng/serial đổi mỗi lần bật lại ADB hoặc đổi cấu hình
-        # instance (RAM/CPU) — không nằm trong COMMON_PORTS cố định của
-        # BlueStacks/LDPlayer/Nox/MEmu, và có lúc đăng ký kiểu "emulator-XXXX"
-        # thay vì "host:port" (gặp thật 16/08/2026). Ưu tiên đọc thẳng serial từ
-        # `adb devices`, đáng tin cậy hơn scan cổng TCP mù (không phân biệt được
-        # cổng "device" thật với cổng control nội bộ đang "offline", và không tự
-        # đăng ký với adb server nên dùng ngay sẽ báo device not found).
-        if cfg.adb_binary:
-            serial = scan_adb_devices(cfg.adb_binary)
-        if serial is None:
-            port = scan_ports(cfg.adb_host)
-            if port is not None and cfg.adb_binary:
-                import subprocess
 
-                subprocess.run(
-                    [cfg.adb_binary, "connect", f"{cfg.adb_host}:{port}"],
-                    capture_output=True, timeout=10,
-                )
-        if serial is None and port is None:
+    if cfg.adb_binary:
+        if port != 0:
+            # Cổng CỐ ĐỊNH đã biết (vd BlueStacks luôn ở 5555) — vẫn phải chủ
+            # động `adb connect` lại mỗi lần khởi động: tắt/bật lại emulator làm
+            # kết nối cũ biến mất khỏi danh sách của adb server trên máy dù cổng
+            # không đổi. Bug thật gặp 26/08/2026 ("screencap failed" sau khi tắt
+            # bật BlueStacks) — im lặng bỏ qua bước này (kể cả khi đã đặt cứng
+            # cổng đúng) là nguyên nhân, không phải thiếu cơ chế dò cổng: dò cổng
+            # (scan_adb_devices) chỉ ĐỌC danh sách "đã kết nối" có sẵn, không tự
+            # tạo kết nối mới, nên đặt cứng cổng đúng mấy cũng vô ích nếu adb
+            # server chưa từng connect tới nó.
+            ensure_connected(cfg.adb_binary, cfg.adb_host, port)
+        else:
+            # Cổng đổi ngẫu nhiên (MuMu) — ưu tiên đọc serial đã kết nối sẵn.
+            serial = scan_adb_devices(cfg.adb_binary)
+            if serial is None:
+                # Chưa có gì kết nối (vd vừa khởi động lại) — chủ động connect
+                # thử các cổng phổ biến để tạo kết nối mới rồi dò lại, thay vì
+                # bó tay ngay như trước.
+                for candidate in COMMON_PORTS:
+                    if ensure_connected(cfg.adb_binary, cfg.adb_host, candidate):
+                        serial = scan_adb_devices(cfg.adb_binary)
+                        if serial:
+                            break
+
+    if port == 0 and serial is None:
+        # Không cấu hình adb_binary (dùng thư viện adb_shell thuần qua connect())
+        # — dò cổng TCP mù kiểu cũ, kém tin cậy hơn nhưng vẫn cần cho trường hợp
+        # này.
+        port = scan_ports(cfg.adb_host)
+        if port is None:
             raise RuntimeError(
                 "No open ADB port found. Start the emulator, and enable ADB under "
-                "Settings > Advanced if you are on BlueStacks for Windows, or "
-                "Developer > Open ADB if you are on MuMu Player."
+                "Settings > Advanced if you are on BlueStacks, or Developer > "
+                "Open ADB if you are on MuMu Player."
             )
-        logging.info("Found ADB device: %s", serial or f"{cfg.adb_host}:{port}")
+
+    logging.info("Found ADB device: %s", serial or f"{cfg.adb_host}:{port}")
 
     scr = AdbScreen(
         template_width=cfg.template_width,
