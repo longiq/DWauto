@@ -327,6 +327,22 @@ def main() -> int:
         # bị nạp đè và báo "recursion is detected during loading of cv2 binary
         # extensions". Bỏ hẳn dòng này khi frozen là cách sửa đúng gốc.
         sys.path.insert(0, str(resource_dir()))
+
+    from dwauto.license import LicenseError, check as check_license
+
+    try:
+        check_license()
+    except LicenseError as exc:
+        import tkinter.messagebox as messagebox
+        import webbrowser
+
+        root = tk.Tk()
+        root.withdraw()
+        if exc.activate_url and messagebox.askyesno(APP_NAME, f"{exc}\n\nMở trang kích hoạt ngay?"):
+            webbrowser.open(exc.activate_url)
+        root.destroy()
+        return 2
+
     App().mainloop()
     return 0
 

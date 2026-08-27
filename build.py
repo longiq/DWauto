@@ -30,6 +30,7 @@ HIDDEN = [
     "dwauto.actions",
     "dwauto.adb",
     "dwauto.config",
+    "dwauto.license",
     "dwauto.rally",
     "dwauto.screen",
     "dwauto.window",

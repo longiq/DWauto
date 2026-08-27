@@ -214,6 +214,18 @@ def main(argv: list[str] | None = None) -> int:
 
     setup_logging(Path(args.log_file) if args.log_file else None)
 
+    from dwauto.license import LicenseError, check as check_license
+
+    try:
+        info = check_license()
+    except LicenseError as exc:
+        print(str(exc), file=sys.stderr)
+        if exc.activate_url:
+            print(f"Kích hoạt tại: {exc.activate_url}", file=sys.stderr)
+        return 2
+    if info["status"] == "trial":
+        logging.info("Dùng thử miễn phí — còn %s ngày.", info.get("days_left"))
+
     try:
         cfg = load_config(args.config)
     except ConfigError as exc:
