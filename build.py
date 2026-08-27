@@ -16,6 +16,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    # Console Windows mặc định dùng cp1252 (không phải UTF-8 như macOS/Linux) —
+    # in tiếng Việt có dấu (vd "Đóng gói xong") ra thẳng sẽ crash UnicodeEncodeError.
+    sys.stdout.reconfigure(encoding="utf-8")
+
 ROOT = Path(__file__).resolve().parent
 NAME = "DWauto"
 SEP = ";" if platform.system() == "Windows" else ":"
