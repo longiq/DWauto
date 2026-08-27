@@ -5,6 +5,7 @@ pyautogui>=0.9.54
 pynput>=1.7.6
 PyYAML>=6.0.1
 adb-shell>=0.4.4      # chụp màn hình thẳng từ Android (backend adb)
+pygetwindow>=0.0.9; sys_platform == "win32"   # dò cửa sổ emulator trên Windows (dwauto/window.py)
 
 # test (chạy được không cần màn hình)
 pytest>=7.0
