@@ -15,7 +15,21 @@ from dwauto import license as lic
 @pytest.fixture(autouse=True)
 def isolated_state(tmp_path, monkeypatch):
     monkeypatch.setattr(lic, "STATE_FILE", tmp_path / "license.json")
+    # Test logic thật của check() — ENABLED đang tạm để False ở code chính vì
+    # tính năng bán membership chưa hoàn thiện (xem comment cạnh ENABLED).
+    monkeypatch.setattr(lic, "ENABLED", True)
     yield
+
+
+def test_check_disabled_short_circuits(monkeypatch):
+    monkeypatch.setattr(lic, "ENABLED", False)
+
+    def boom(dev_id):
+        raise AssertionError("không được gọi mạng khi ENABLED=False")
+
+    monkeypatch.setattr(lic, "_fetch_status", boom)
+    result = lic.check()
+    assert result == {"status": "active", "days_left": None, "offline": False}
 
 
 def test_device_id_stable_across_calls():

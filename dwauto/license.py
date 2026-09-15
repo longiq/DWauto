@@ -23,6 +23,11 @@ LICENSE_SERVER = "https://dw.longiq.xyz"
 GRACE_SECONDS = 24 * 3600
 STATE_FILE = Path.home() / ".dwauto" / "license.json"
 
+# TẠM THỜI TẮT (16/09/2026): PayPal Subscriptions chưa có credential thật, tính
+# năng bán membership chưa hoàn thiện — đổi thành True khi quay lại làm tiếp
+# và sẵn sàng bật thu phí thật. Khi False, check() bỏ qua hẳn việc gọi server.
+ENABLED = False
+
 
 class LicenseError(Exception):
     """Không được phép chạy — kèm activate_url để dẫn người dùng đi kích hoạt."""
@@ -76,6 +81,9 @@ def check() -> dict:
     Ném LicenseError (có .activate_url) nếu không được phép — gọi nơi khởi
     động chương trình (main.py / app.py), trước khi làm bất cứ việc gì khác.
     """
+    if not ENABLED:
+        return {"status": "active", "days_left": None, "offline": False}
+
     dev_id = device_id()
     state = _load_state()
     try:
